@@ -1,6 +1,8 @@
 import {z} from 'zod'
 import Sdk from '@1inch/cross-chain-sdk'
 import * as process from 'node:process'
+import { create } from 'node:domain'
+import { wrap } from 'node:module'
 
 const bool = z
     .string()
@@ -16,12 +18,29 @@ const ConfigSchema = z.object({
 
 const fromEnv = ConfigSchema.parse(process.env)
 
+export interface InjectiveChainConfig {
+    chainId: string;
+    rpc: string;
+    grpc: string;
+    rest: string;
+    prefix: string;
+    denom: string;
+    tokens: {
+        [symbol: string]: {
+            denom: string;
+            decimals: number;
+            peggyAddress?: string; // For Peggy bridge tokens
+        };
+    };
+    mnemonic: string;
+}
+
 export const config = {
     chain: {
         source: {
-            chainId: Sdk.NetworkEnum.ETHEREUM,
-            url: fromEnv.SRC_CHAIN_RPC,
-            createFork: fromEnv.SRC_CHAIN_CREATE_FORK,
+            chainId: 1,
+            url: 'https://eth.merkle.io',
+            createFork: true,
             limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
             wrappedNative: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
             ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
@@ -33,19 +52,19 @@ export const config = {
             }
         },
         destination: {
-            chainId: Sdk.NetworkEnum.BINANCE,
-            url: fromEnv.DST_CHAIN_RPC,
-            createFork: fromEnv.DST_CHAIN_CREATE_FORK,
+            chainId: 'injective-888',
+            url: 'https://testnet.sentry.tm.injective.network:443',
+            createFork: false,
             limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
-            wrappedNative: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
+            wrappedNative: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
             ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
             tokens: {
-                USDC: {
-                    address: '0x8965349fb649a33a30cbfda057d8ec2c48abe2a2',
-                    donor: '0x4188663a85C92EEa35b5AD3AA5cA7CeB237C6fe9'
+                Albcoin_Token: {
+                    address: 'inj1jykecq2m2kx496jjqexjv09snp8lwktrulamu0',
+                    donor: 'inj1zrnpc8zf80p6mctwln77wfagrya5ssyfpayx3t'
                 }
             }
-        }
+        },
     }
 } as const
 
