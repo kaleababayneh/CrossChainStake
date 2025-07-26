@@ -23,6 +23,9 @@ importers:
       '@injectivelabs/sdk-ts':
         specifier: ^1.15.43
         version: 1.15.43(bufferutil@4.0.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(utf-8-validate@5.0.10)
+      '@injectivelabs/ts-types':
+        specifier: ^1.15.41
+        version: 1.15.41
       '@injectivelabs/utils':
         specifier: ^1.15.41
         version: 1.15.41
