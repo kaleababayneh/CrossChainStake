@@ -18,22 +18,22 @@ const ConfigSchema = z.object({
 
 const fromEnv = ConfigSchema.parse(process.env)
 
-export interface InjectiveChainConfig {
-    chainId: string;
-    rpc: string;
-    grpc: string;
-    rest: string;
-    prefix: string;
-    denom: string;
-    tokens: {
-        [symbol: string]: {
-            denom: string;
-            decimals: number;
-            peggyAddress?: string; // For Peggy bridge tokens
-        };
-    };
-    mnemonic: string;
-}
+// export interface InjectiveChainConfig {
+//     chainId: string;
+//     rpc: string;
+//     grpc: string;
+//     rest: string;
+//     prefix: string;
+//     denom: string;
+//     tokens: {
+//         [symbol: string]: {
+//             denom: string;
+//             decimals: number;
+//             peggyAddress?: string; // For Peggy bridge tokens
+//         };
+//     };
+//     mnemonic: string;
+// }
 
 export const config = {
     chain: {
@@ -53,14 +53,15 @@ export const config = {
         },
         destination: {
             chainId: 'injective-888',
-            url: 'https://testnet.sentry.tm.injective.network:443',
+            url: 'https://testnet.sentry.lcd.injective.network',
             createFork: false,
             limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
             wrappedNative: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
             ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
             tokens: {
-                Albcoin_Token: {
-                    address: 'inj12nnymkfwlr6c6c5ksmrq29nlh4x0pmls6xmkc9', // INJ token address on Injective
+                INJ: {
+                    denom: 'inj',
+                    decimals: 18,
                     donor: 'inj1zrnpc8zf80p6mctwln77wfagrya5ssyfpayx3t'
                 }
             }
