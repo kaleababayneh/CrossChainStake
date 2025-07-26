@@ -29,6 +29,8 @@ const gas = { gas: 2_000_000, gasPrice: 500_000_000 } // adjust if needed
 const recipientAddress = process.env.RECIPIENT        // e.g. 'inj1...'
 const contractAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS as string 
 
+const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
 
 async function initializeSwapLedger() {
   const instantiateMsg = {} // Your instantiateMsg is empty
@@ -60,7 +62,7 @@ async function initializeSwapLedger() {
   console.log('Tx Hash:', response.txHash)
 }
 
-export async function anounce_order() {
+export async function anounce_order(hash: string) {
   console.log(`🔐 Announcing order from ${address}`)
 
   const broadcaster = new MsgBroadcasterWithPk({
@@ -75,17 +77,14 @@ export async function anounce_order() {
   })
 
   // Fixed preimage value (32 bytes in hex format)
-  const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
   
-  // Calculate SHA256 hash of the preimage to match Rust contract
-  const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
 
   const expiresAtHeight = 90_000_000 // or use block height + N buffer
 
   // Compose the message according to your Rust contract
   const executeMsg = {
     create: {
-      id: 'swap003',
+      id: 'swap00312',
       hash,
       recipient: recipientAddress,
       expires: {
@@ -115,3 +114,53 @@ export async function anounce_order() {
   console.log('Preimage (hex):', preimage)
   console.log('Hash (SHA256):', hash)
 }
+
+export async function fund_dst_escrow(hash: string) {
+  console.log(`💰 Funding dst escrow with INJ from ${address}`)
+
+  const broadcaster = new MsgBroadcasterWithPk({
+    network: Network.Testnet,
+    chainId: ChainId.Testnet,
+    privateKey: wallet,
+    endpoints: {
+      grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
+      rest: 'https://testnet.sentry.lcd.injective.network',
+      indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
+    },
+  })
+
+
+
+  const expiresAtHeight = 90_000_000
+
+  const executeMsg = {
+    create: {
+      id: 'swap125',
+      hash,
+      recipient: recipientAddress,
+      expires: {
+        at_height: expiresAtHeight,
+      },
+    },
+  }
+
+  const funds = [{
+    amount: '50000000000000', // 0.5 INJ
+    denom: 'inj',
+  }]
+
+  const msg = MsgExecuteContractCompat.fromJSON({
+    sender: address,
+    contractAddress,
+    msg: executeMsg,
+    funds,
+  })
+
+  const tx = await broadcaster.broadcast({ msgs: msg })
+
+  console.log('✅ Counterparty funded dst escrow with INJ')
+  console.log('Tx Hash:', tx.txHash)
+  console.log('Preimage:', preimage)
+  console.log('Hash (SHA256):', hash)
+}
+
