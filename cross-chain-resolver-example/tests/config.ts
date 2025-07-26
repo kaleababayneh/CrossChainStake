@@ -60,7 +60,7 @@ export const config = {
             ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
             tokens: {
                 Albcoin_Token: {
-                    address: 'inj1jykecq2m2kx496jjqexjv09snp8lwktrulamu0',
+                    address: 'inj12nnymkfwlr6c6c5ksmrq29nlh4x0pmls6xmkc9', // INJ token address on Injective
                     donor: 'inj1zrnpc8zf80p6mctwln77wfagrya5ssyfpayx3t'
                 }
             }

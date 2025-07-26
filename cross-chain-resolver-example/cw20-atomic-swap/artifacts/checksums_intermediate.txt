@@ -1,0 +1,1 @@
+56204c1297829ff60564b657f72c7288096772a75cb963d7eb279c5431044748  ./target/wasm32-unknown-unknown/release/cw20_atomic_swap.wasm
