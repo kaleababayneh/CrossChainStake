@@ -19,15 +19,21 @@ dotenv.config()
 
 // Using a mnemonic phrase
 const mnemonic = process.env.MNEMONIC as string 
+const mnemonic2 = process.env.MNEMONIC2 as string
 
 const wallet = PrivateKey.fromMnemonic(mnemonic)
 const address = wallet.toAddress().toBech32()
+
+const wallet2 = PrivateKey.fromMnemonic(mnemonic2)
+const address2 = wallet2.toAddress().toBech32()
 
 const codeId = 33343 // e.g. "33340"
 const contractLabel = 'CW20 Atomic Swap'
 const gas = { gas: 2_000_000, gasPrice: 500_000_000 } // adjust if needed
 const recipientAddress = process.env.RECIPIENT        // e.g. 'inj1...'
 const contractAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS as string 
+
+
 
 const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
@@ -164,3 +170,38 @@ export async function fund_dst_escrow(hash: string) {
   console.log('Hash (SHA256):', hash)
 }
 
+export async function claim_funds(swapId: string, preimage: string) {
+
+    console.log(`🔓 Claiming funds from swap ${swapId} by revealing preimage from ${address2}`)
+  
+    const broadcaster = new MsgBroadcasterWithPk({
+      network: Network.Testnet,
+      chainId: ChainId.Testnet,
+      privateKey: wallet2,
+      endpoints: {
+        grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
+        rest: 'https://testnet.sentry.lcd.injective.network',
+        indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
+      },
+    })
+  
+    const executeMsg = {
+      release: {
+        id: swapId,
+        preimage,
+      },
+    }
+  
+    const msg = MsgExecuteContractCompat.fromJSON({
+      sender: address2,
+      contractAddress,
+      msg: executeMsg,
+      funds: [], // no funds needed
+    })
+  
+    const tx = await broadcaster.broadcast({ msgs: msg })
+  
+    console.log('✅ Funds claimed successfully!')
+    console.log('Tx Hash:', tx.txHash)
+    console.log('Preimage:', preimage)
+}
