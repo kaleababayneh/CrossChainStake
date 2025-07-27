@@ -825,7 +825,7 @@ async function getProvider(cnf: ChainConfig): Promise<{node?: CreateServerReturn
     if (!cnf.createFork) {
         const network =  Network.Testnet
         const endpoints = getNetworkEndpoints(network)
-        console.log(`[${cnf.chainId}]`, `Using endpoints`, endpoints)
+        //console.log(new ChainGrpcWasmApi(endpoints.grpc))
         return {
             provider: new ChainGrpcWasmApi(endpoints.grpc)
         }

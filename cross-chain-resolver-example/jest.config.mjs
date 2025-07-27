@@ -17,5 +17,8 @@ export default {
     transformIgnorePatterns: [
         // "/node_modules/",
         // "\\.pnp\\.[^\\/]+$",
-    ]
+    ],
+    moduleNameMapping: {
+        // '^browser-headers$': '<rootDir>/__mocks__/browser-headers.js'
+    }
 }

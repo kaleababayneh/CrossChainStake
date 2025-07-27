@@ -39,8 +39,8 @@ importers:
         specifier: ^1.14.41
         version: 1.14.41(db4ebfb8c953b83169afc814bd1c1e9a)
       browser-headers:
-        specifier: ^0.4.1
-        version: 0.4.1
+        specifier: 0.4.0
+        version: 0.4.0
       dotenv:
         specifier: 16.4.5
         version: 16.4.5
@@ -3603,6 +3603,9 @@ packages:
 
   brorand@1.1.0:
     resolution: {integrity: sha512-cKV8tMCEpQs4hK/ik71d6LrPOnpkpGBR0wzxqr68g2m/LB2GxVYQroAjMJZRVM1Y4BCjCKc3vAamxSzOY2RP+w==}
+
+  browser-headers@0.4.0:
+    resolution: {integrity: sha512-kE+qq42Gl2DspIAKz7bh6O9XKwWImXEsDGpbhX+fYC88DRV+aKMD2mAgC9GfxGNBOeTxZcziNjEyfRy+Pb76wA==}
 
   browser-headers@0.4.1:
     resolution: {integrity: sha512-CA9hsySZVo9371qEHjHZtYxV2cFtVj5Wj/ZHi8ooEsrtm4vOnl9Y9HmyYWk9q+05d7K3rdoAE0j3MVEFVvtQtg==}
@@ -14404,6 +14407,8 @@ snapshots:
       fill-range: 7.1.1
 
   brorand@1.1.0: {}
+
+  browser-headers@0.4.0: {}
 
   browser-headers@0.4.1: {}
 
