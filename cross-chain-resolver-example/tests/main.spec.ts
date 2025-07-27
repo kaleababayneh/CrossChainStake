@@ -26,7 +26,7 @@ import {EscrowFactory} from './escrow-factory'
 import factoryContract from '../dist/contracts/TestEscrowFactory.sol/TestEscrowFactory.json'
 import resolverContract from '../dist/contracts/Resolver.sol/Resolver.json'
 
-import * as injective from './injective-mock'
+import * as injective from './injective'
 import { createHash } from 'crypto';
 import { Network, getNetworkEndpoints } from '@injectivelabs/networks'
 import { ChainGrpcWasmApi } from '@injectivelabs/sdk-ts'
@@ -44,15 +44,23 @@ describe('Resolving example', () => {
     const srcChainId = config.chain.source.chainId
     const dstChainId = config.chain.destination.chainId
 
-    type Chain = {
+    type EthereumChain = {
         node?: CreateServerReturnType | undefined
         provider: JsonRpcProvider
         escrowFactory: string
         resolver: string
+        type: 'ethereum'
+   }
+
+    type InjectiveChain = {
+        provider: ChainGrpcWasmApi
+        escrowFactory: string  // This will be a contract address on Injective
+        resolver: string       // This will be a contract address on Injective
+        type: 'injective-888'
     }
 
-    let src: Chain
-    let dst: Chain
+    let src: EthereumChain
+    let dst: InjectiveChain
 
     let srcChainUser: Wallet
     let dstChainUser: Wallet
@@ -67,7 +75,8 @@ describe('Resolving example', () => {
     let srcTimestamp: bigint
 
     async function increaseTime(t: number): Promise<void> {
-        await Promise.all([src, dst].map((chain) => chain.provider.send('evm_increaseTime', [t])))
+        // removed destination
+        await Promise.all([src].map((chain) => chain.provider.send('evm_increaseTime', [t])))
     }
     
     beforeAll(async () => {
@@ -75,6 +84,8 @@ describe('Resolving example', () => {
 
         srcChainUser = new Wallet(userPk, src.provider)
         dstChainUser = new Wallet(userPk, dst.provider)
+
+        
         srcChainResolver = new Wallet(resolverPk, src.provider)
         dstChainResolver = new Wallet(resolverPk, dst.provider)
 
@@ -781,43 +792,58 @@ describe('Resolving example', () => {
     // })
 })
 
-async function initChain(
-    cnf: ChainConfig
-): Promise<{node?: CreateServerReturnType; provider: JsonRpcProvider; escrowFactory: string; resolver: string}> {
+async function initChain(cnf: ChainConfig): Promise<Chain> {
     const {node, provider} = await getProvider(cnf)
+    
+    if (cnf.createFork) {
+        // Initialize Injective chain
+        return await initInjectiveChain(cnf, provider as ChainGrpcWasmApi)
+    } else {
+        // Initialize Ethereum-compatible chain
+        return await initEthereumChain(cnf, provider as JsonRpcProvider, node)
+    }
+}
+async function initEthereumChain(
+    cnf: ChainConfig, 
+    provider: JsonRpcProvider, 
+    node?: CreateServerReturnType
+): Promise<EthereumChain> {
     const deployer = new SignerWallet(cnf.ownerPrivateKey, provider)
 
-    // deploy EscrowFactory
     const escrowFactory = await deploy(
         factoryContract,
         [
             cnf.limitOrderProtocol,
-            cnf.wrappedNative, // feeToken,
-            Address.fromBigInt(0n).toString(), // accessToken,
-            deployer.address, // owner
-            60 * 30, // src rescue delay
-            60 * 30 // dst rescue delay
+            cnf.wrappedNative,
+            Address.fromBigInt(0n).toString(),
+            deployer.address,
+            60 * 30,
+            60 * 30
         ],
         provider,
         deployer
     )
-    console.log(`[${cnf.chainId}]`, `Escrow factory contract deployed to`, escrowFactory)
 
-    // deploy Resolver contract
     const resolver = await deploy(
         resolverContract,
         [
             escrowFactory,
             cnf.limitOrderProtocol,
-            computeAddress(resolverPk) // resolver as owner of contract
+            computeAddress(resolverPk)
         ],
         provider,
         deployer
     )
-    console.log(`[${cnf.chainId}]`, `Resolver contract deployed to`, resolver)
 
-    return {node: node, provider, resolver, escrowFactory}
+    return {
+        type: 'ethereum',
+        node,
+        provider,
+        resolver,
+        escrowFactory
+    }
 }
+
 
 async function getProvider(cnf: ChainConfig): Promise<{node?: CreateServerReturnType; provider: any}> {
     

@@ -38,7 +38,7 @@ const fromEnv = ConfigSchema.parse(process.env)
 export const config = {
     chain: {
         source: {
-            chainId: 1,
+            chainId: 1 as const,
             url: 'https://eth.merkle.io',
             createFork: true,
             limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
