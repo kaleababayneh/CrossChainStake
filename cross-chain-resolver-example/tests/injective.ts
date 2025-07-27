@@ -32,13 +32,13 @@ const contractLabel = 'CW20 Atomic Swap'
 const gas = { gas: 2_000_000, gasPrice: 500_000_000 } // adjust if needed
 const recipientAddress = process.env.RECIPIENT        // e.g. 'inj1...'
 const contractAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS as string 
-
+const cusdcAddress = process.env.CUSDC_CONTRACT_ADDRESS as string
 
 
 const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
 
-async function initializeSwapLedger() {
+export async function initializeSwapLedger() {
   const instantiateMsg = {} // Your instantiateMsg is empty
 
   const msg = MsgInstantiateContract.fromJSON({
@@ -69,60 +69,62 @@ async function initializeSwapLedger() {
 }
 
 export async function anounce_order(hash: string) {
-  console.log(`🔐 Announcing order from ${address}`)
-
-  const broadcaster = new MsgBroadcasterWithPk({
-    network: Network.Testnet, 
-    chainId: ChainId.Testnet,
-    privateKey: wallet,
-    endpoints: {
-      indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
-      grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
-      rest: 'https://testnet.sentry.lcd.injective.network',
-    },
-  })
-
-  // Fixed preimage value (32 bytes in hex format)
+    console.log(`🔐 Announcing order from ${address}`)
   
-
-  const expiresAtHeight = 90_000_000 // or use block height + N buffer
-
-  // Compose the message according to your Rust contract
-  const executeMsg = {
-    create: {
-      id: 'swap00312',
-      hash,
-      recipient: recipientAddress,
-      expires: {
-        at_height: expiresAtHeight
+    const broadcaster = new MsgBroadcasterWithPk({
+      network: Network.Testnet,
+      chainId: ChainId.Testnet,
+      privateKey: wallet,
+      endpoints: {
+        indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
+        grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
+        rest: 'https://testnet.sentry.lcd.injective.network',
+      },
+    })
+  
+    const expiresAtHeight = 90_000_000
+  
+    const swapId = 'swap-cusdc-001'
+  
+    // This is the message that the CW20 token contract expects
+ 
+    const cw20SendMsg = {
+        send: {
+          contract: contractAddress,
+          amount: '10000000', // 10 CUSDC (6 decimals)
+          msg: Buffer.from(JSON.stringify({
+            create: {
+              id: 'swap003121789',
+              hash,
+              recipient: recipientAddress,
+              expires: {
+                at_height: expiresAtHeight
+              }
+            }
+          })).toString('base64'),
+        }
       }
-    }
-  }
-
-  const funds = [{
-    amount: '1000000000000', // 1 INJ (18 decimals)
-    denom: 'inj'
-  }]
-
-  const msg = MsgExecuteContractCompat.fromJSON({
-    sender: address,
-    contractAddress,
-    msg: executeMsg,
-    funds,
-  })
-
-  const tx = await broadcaster.broadcast({
-    msgs: msg,
-  })
-
-  console.log('✅ Swap announced!')
-  console.log('Tx Hash:', tx.txHash)
-  console.log('Preimage (hex):', preimage)
-  console.log('Hash (SHA256):', hash)
+    
+  
+    const msg = MsgExecuteContractCompat.fromJSON({
+      sender: address,
+      contractAddress: cusdcAddress, // CW20 token address
+      msg: cw20SendMsg,
+      funds: [], // no native funds sent
+    })
+  
+    const tx = await broadcaster.broadcast({
+      msgs: msg,
+    })
+  
+    console.log('✅ CUSDC Swap announced!')
+    console.log('Tx Hash:', tx.txHash)
+    console.log('Hash (SHA256):', hash)
 }
 
+// hasn't tested fund_dst_escrow function yet
 export async function fund_dst_escrow(hash: string) {
-  console.log(`💰 Funding dst escrow with INJ from ${address}`)
+  console.log(`💰 Funding dst escrow with CUSDC from ${address}`)
 
   const broadcaster = new MsgBroadcasterWithPk({
     network: Network.Testnet,
@@ -135,11 +137,9 @@ export async function fund_dst_escrow(hash: string) {
     },
   })
 
-
-
   const expiresAtHeight = 90_000_000
 
-  const executeMsg = {
+  const escrowMsg = {
     create: {
       id: 'swap125',
       hash,
@@ -150,29 +150,30 @@ export async function fund_dst_escrow(hash: string) {
     },
   }
 
-  const funds = [{
-    amount: '50000000000000', // 0.5 INJ
-    denom: 'inj',
-  }]
+  const cw20Msg = {
+    send: {
+      contract: contractAddress, // 🧠 Your swap contract address
+      amount: '10000000',        // 💰 10 CUSDC (decimals = 6)
+      msg: Buffer.from(JSON.stringify(escrowMsg)).toString('base64'),
+    },
+  }
 
   const msg = MsgExecuteContractCompat.fromJSON({
     sender: address,
-    contractAddress,
-    msg: executeMsg,
-    funds,
+    contractAddress: cusdcAddress, // 🪙 CUSDC CW20 contract
+    msg: cw20Msg,
+    funds: [], // no native INJ sent
   })
 
   const tx = await broadcaster.broadcast({ msgs: msg })
 
-  console.log('✅ Counterparty funded dst escrow with INJ')
+  console.log('✅ Counterparty funded dst escrow with CUSDC')
   console.log('Tx Hash:', tx.txHash)
-  console.log('Preimage:', preimage)
   console.log('Hash (SHA256):', hash)
 }
 
 export async function claim_funds(swapId: string, preimage: string) {
-
-    console.log(`🔓 Claiming funds from swap ${swapId} by revealing preimage from ${address2}`)
+    console.log(`🔓 Claiming CUSDC from swap "${swapId}" by revealing preimage from ${address2}`)
   
     const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,
@@ -194,14 +195,14 @@ export async function claim_funds(swapId: string, preimage: string) {
   
     const msg = MsgExecuteContractCompat.fromJSON({
       sender: address2,
-      contractAddress,
+      contractAddress, // 👈 your atomic swap contract address
       msg: executeMsg,
-      funds: [], // no funds needed
+      funds: [], // 👈 no funds sent when claiming
     })
   
     const tx = await broadcaster.broadcast({ msgs: msg })
   
-    console.log('✅ Funds claimed successfully!')
+    console.log('✅ CUSDC successfully claimed!')
     console.log('Tx Hash:', tx.txHash)
     console.log('Preimage:', preimage)
 }

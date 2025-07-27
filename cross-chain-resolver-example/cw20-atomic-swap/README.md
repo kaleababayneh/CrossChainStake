@@ -1,6 +1,7 @@
 # Atomic Swaps
 33340
 inj1jykecq2m2kx496jjqexjv09snp8lwktrulamu0 - ALB token
+inj1k6hdgvqzws7xr3aa40acacw5egwghhf5kzmwye - CUSDC
 inj189rtkv2xzpsq96c2w35qhgd4qkmj9gj7tzv5f4 - atomic swap contract
 inj1zrnpc8zf80p6mctwln77wfagrya5ssyfpayx3t - injetived
 This is a contract that allows users to execute atomic swaps.
