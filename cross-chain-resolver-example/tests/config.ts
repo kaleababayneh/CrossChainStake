@@ -51,7 +51,7 @@ export const config = {
                 }
             }
         },
-        destination: {
+        destinationa: {
             chainId: 'injective-888',
             url: 'https://testnet.sentry.lcd.injective.network',
             createFork: false,
@@ -65,7 +65,7 @@ export const config = {
                 }
             }
         },
-        destinationb: {
+        destination: {
             chainId: Sdk.NetworkEnum.BINANCE,
             url: fromEnv.DST_CHAIN_RPC,
             createFork: fromEnv.DST_CHAIN_CREATE_FORK,

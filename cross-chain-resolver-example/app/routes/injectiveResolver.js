@@ -13,19 +13,18 @@ import { ethers } from 'ethers'
 import * as dotenv from 'dotenv'
 import { relayer } from './injectiveRelayer.js'
 
-dotenv.config()
-
+dotenv.config({ path: '../.env' })
 const router = express.Router()
 
 class EscrowResolver {
   constructor() {
-    this.mnemonic = process.env.RESOLVER_MNEMONIC || 'your test mnemonic here'
+    this.mnemonic = process.env.RESOLVER_MNEMONIC 
     this.wallet = PrivateKey.fromMnemonic(this.mnemonic)
     this.address = this.wallet.toAddress().toBech32()
     
     // Injective configuration for escrow creation
-    this.injectiveCw20Address = process.env.INJECTIVE_CW20_ADDRESS || 'inj1...' // CUSDC contract
-    this.injectiveEscrowAddress = process.env.INJECTIVE_ESCROW_CONTRACT || 'inj1...' // Atomic swap contract
+    this.injectiveCw20Address = process.env.CUSDC_CONTRACT_ADDRESS
+    this.injectiveEscrowAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS
     
     this.injectiveProvider = new ChainGrpcWasmApi(Network.Testnet)
     this.broadcaster = new MsgBroadcasterWithPk({

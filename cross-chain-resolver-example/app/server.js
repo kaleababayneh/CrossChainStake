@@ -5,7 +5,7 @@ import relayerRoutes from './routes/injectiveRelayer.js'
 import resolverRoutes from './routes/injectiveResolver.js'
 import * as dotenv from 'dotenv'
 
-dotenv.config()
+dotenv.config({ path: '../.env' })
 
 const app = express()
 const port = process.env.PORT || 3000
