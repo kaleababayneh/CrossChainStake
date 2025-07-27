@@ -37,7 +37,7 @@ const cusdcAddress = process.env.CUSDC_CONTRACT_ADDRESS as string
 
 const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
-
+const SWAP_ID = 'swap-cusdc-0233423201' // e.g. 'swap-cusdc-001'
 export async function initializeSwapLedger() {
   const instantiateMsg = {} // Your instantiateMsg is empty
 
@@ -68,7 +68,9 @@ export async function initializeSwapLedger() {
   console.log('Tx Hash:', response.txHash)
 }
 
-export async function anounce_order(hash: string) {
+export async function anounce_order() {
+    const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
     console.log(`🔐 Announcing order from ${address}`)
   
     const broadcaster = new MsgBroadcasterWithPk({
@@ -94,7 +96,7 @@ export async function anounce_order(hash: string) {
           amount: '10000000', // 10 CUSDC (6 decimals)
           msg: Buffer.from(JSON.stringify({
             create: {
-              id: 'swap003121789',
+              id: 'swap0031217389',
               hash,
               recipient: recipientAddress,
               expires: {
@@ -123,8 +125,11 @@ export async function anounce_order(hash: string) {
 }
 
 // hasn't tested fund_dst_escrow function yet
-export async function fund_dst_escrow(hash: string) {
+export async function fund_dst_escrow() {
+const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+   const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
   console.log(`💰 Funding dst escrow with CUSDC from ${address}`)
+  const swapId = SWAP_ID
 
   const broadcaster = new MsgBroadcasterWithPk({
     network: Network.Testnet,
@@ -141,7 +146,7 @@ export async function fund_dst_escrow(hash: string) {
 
   const escrowMsg = {
     create: {
-      id: 'swap125',
+      id: swapId,
       hash,
       recipient: recipientAddress,
       expires: {
@@ -172,7 +177,9 @@ export async function fund_dst_escrow(hash: string) {
   console.log('Hash (SHA256):', hash)
 }
 
-export async function claim_funds(swapId: string, preimage: string) {
+export async function claim_funds() {
+    const swapId = SWAP_ID // e.g. 'swap-cusdc-001'
+    const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
     console.log(`🔓 Claiming CUSDC from swap "${swapId}" by revealing preimage from ${address2}`)
   
     const broadcaster = new MsgBroadcasterWithPk({

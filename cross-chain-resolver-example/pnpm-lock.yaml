@@ -17,6 +17,12 @@ importers:
       '@injectivelabs/exceptions':
         specifier: ^1.15.40
         version: 1.15.40
+      '@injectivelabs/grpc-web':
+        specifier: ^0.0.6
+        version: 0.0.6(google-protobuf@3.21.4)
+      '@injectivelabs/grpc-web-node-http-transport':
+        specifier: ^0.0.2
+        version: 0.0.2(@injectivelabs/grpc-web@0.0.6(google-protobuf@3.21.4))
       '@injectivelabs/networks':
         specifier: ^1.15.41
         version: 1.15.41
@@ -32,6 +38,9 @@ importers:
       '@injectivelabs/wallet-ts':
         specifier: ^1.14.41
         version: 1.14.41(db4ebfb8c953b83169afc814bd1c1e9a)
+      browser-headers:
+        specifier: ^0.4.1
+        version: 0.4.1
       dotenv:
         specifier: 16.4.5
         version: 16.4.5
@@ -1159,6 +1168,11 @@ packages:
 
   '@injectivelabs/grpc-web@0.0.1':
     resolution: {integrity: sha512-Pu5YgaZp+OvR5UWfqbrPdHer3+gDf+b5fQoY+t2VZx1IAVHX8bzbN9EreYTvTYtFeDpYRWM8P7app2u4EX5wTw==}
+    peerDependencies:
+      google-protobuf: ^3.14.0
+
+  '@injectivelabs/grpc-web@0.0.6':
+    resolution: {integrity: sha512-jvPXJxRq0qermzPoPp35hP8Aet0jDpr0dfMtlfs7GOCfinnLvAm4WObnsLf0c81dci7t9XgJkvX6q11Cfjmv9A==}
     peerDependencies:
       google-protobuf: ^3.14.0
 
@@ -9491,11 +9505,20 @@ snapshots:
     dependencies:
       '@injectivelabs/grpc-web': 0.0.1(google-protobuf@3.21.4)
 
+  '@injectivelabs/grpc-web-node-http-transport@0.0.2(@injectivelabs/grpc-web@0.0.6(google-protobuf@3.21.4))':
+    dependencies:
+      '@injectivelabs/grpc-web': 0.0.6(google-protobuf@3.21.4)
+
   '@injectivelabs/grpc-web-react-native-transport@0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))':
     dependencies:
       '@injectivelabs/grpc-web': 0.0.1(google-protobuf@3.21.4)
 
   '@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4)':
+    dependencies:
+      browser-headers: 0.4.1
+      google-protobuf: 3.21.4
+
+  '@injectivelabs/grpc-web@0.0.6(google-protobuf@3.21.4)':
     dependencies:
       browser-headers: 0.4.1
       google-protobuf: 3.21.4

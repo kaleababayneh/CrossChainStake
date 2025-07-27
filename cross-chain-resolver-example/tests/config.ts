@@ -59,14 +59,13 @@ export const config = {
             wrappedNative: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
             ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
             tokens: {
-                INJ: {
-                    denom: 'inj',
-                    decimals: 18,
+                CUSDC: {
+                    address: 'inj1k6hdgvqzws7xr3aa40acacw5egwghhf5kzmwye',
                     donor: 'inj1zrnpc8zf80p6mctwln77wfagrya5ssyfpayx3t'
                 }
             }
         },
-        destinationa: {
+        destinationb: {
             chainId: Sdk.NetworkEnum.BINANCE,
             url: fromEnv.DST_CHAIN_RPC,
             createFork: fromEnv.DST_CHAIN_CREATE_FORK,
