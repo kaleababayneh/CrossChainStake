@@ -51,7 +51,7 @@ export const config = {
                 }
             }
         },
-        destinationa: {
+        destination: {
             chainId: 'injective-888',
             url: 'https://testnet.sentry.lcd.injective.network',
             createFork: false,
@@ -65,10 +65,10 @@ export const config = {
                 }
             }
         },
-        destination: {
+        destinationa: {
             chainId: Sdk.NetworkEnum.BINANCE,
             url: fromEnv.DST_CHAIN_RPC,
-            createFork: fromEnv.DST_CHAIN_CREATE_FORK,
+            createFork: true,
             limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
             wrappedNative: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
             ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',

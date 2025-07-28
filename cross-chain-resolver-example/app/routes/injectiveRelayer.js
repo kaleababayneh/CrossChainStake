@@ -13,7 +13,7 @@ const ESCROW_FACTORY_ABI = [
 class EscrowRelayer {
   constructor() {
     // Validate required environment variables
-    this.ethereumRpcUrl = process.env.SRC_CHAIN_RPC
+    this.ethereumRpcUrl = 'http://localhost:8545'
     this.escrowFactoryAddress = process.env.ESCROW_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000'
     this.resolverWebhookUrl = process.env.RESOLVER_WEBHOOK_URL // Optional webhook instead of polling
     this.maxHistoryBlocks = parseInt(process.env.MAX_HISTORY_BLOCKS) || 100
@@ -253,13 +253,24 @@ router.post('/mark-processed/:escrowId', (req, res) => {
 
 router.post('/initialize', async (req, res) => {
   try {
-    const { factoryAddress } = req.body
+    const { factoryAddress, srcChainUrl } = req.body
     if (!factoryAddress) {
       return res.status(400).json({ error: 'factoryAddress required' })
     }
     
+    // Update RPC URL if provided (for anvil integration)
+    if (srcChainUrl) {
+      relayer.ethereumRpcUrl = srcChainUrl
+      relayer.ethereumProvider = null // Reset provider to force reconnection
+      console.log(`🔧 Updated RPC URL to: ${srcChainUrl}`)
+    }
+    
     await relayer.initialize(factoryAddress)
-    res.json({ success: true, message: `Initialized with factory: ${factoryAddress}` })
+    res.json({ 
+      success: true, 
+      message: `Initialized with factory: ${factoryAddress}`,
+      rpcUrl: relayer.ethereumRpcUrl
+    })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
