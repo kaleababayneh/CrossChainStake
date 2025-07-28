@@ -214,11 +214,15 @@ describe('Resolving example', () => {
             const signature = await srcChainUser.signOrder(srcChainId, order)
             const orderHash = order.getOrderHash(srcChainId)
 
-            
-            const resolverContract = new Resolver(src.resolver, dst.resolver)
+           
+           // const resolverContract = new Resolver(src.resolver, dst.resolver)
             console.log(`[${srcChainId}]`, `Filling order ${orderHash}`)
             const fillAmount = order.makingAmount
-            
+
+            console.log("src.resolver", src.resolver)
+            console.log("dst.resolver", dst.resolver)
+            console.log("fillAmounr", fillAmount)
+            await injective.fund_dst_escrow()
             /*
             const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(
                 resolverContract.deploySrc(

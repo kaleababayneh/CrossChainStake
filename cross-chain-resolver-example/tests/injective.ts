@@ -37,7 +37,7 @@ const cusdcAddress = process.env.CUSDC_CONTRACT_ADDRESS as string
 
 const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
-const SWAP_ID = 'swap-cusdc-0233423201' // e.g. 'swap-cusdc-001'
+const SWAP_ID = 'swap-0233423201' // e.g. 'swap-cusdc-001'
 export async function initializeSwapLedger() {
   const instantiateMsg = {} // Your instantiateMsg is empty
 
