@@ -222,7 +222,45 @@ describe('Resolving example', () => {
             console.log("src.resolver", src.resolver)
             console.log("dst.resolver", dst.resolver)
             console.log("fillAmounr", fillAmount)
-            await injective.fund_dst_escrow()
+
+            const resolverContract = new Resolver(src.resolver, dst.resolver)
+
+            // Step 2: Deploy source escrow on EVM side using 1inch SDK
+            console.log(`[${srcChainId}] Deploying source escrow for order ${orderHash}`)
+            console.log(resolverContract)
+            const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(
+                resolverContract.deploySrc(
+                    srcChainId,
+                    order,
+                    signature,
+                    Sdk.TakerTraits.default()
+                        .setExtension(order.extension)
+                        .setAmountMode(Sdk.AmountMode.maker)
+                        .setAmountThreshold(order.takingAmount),
+                    fillAmount
+                )
+            )
+            
+            console.log(`[${srcChainId}] Source escrow deployed in tx ${orderFillHash}`)
+            const srcEscrowEvent = await srcFactory.getSrcDeployEvent(srcDeployBlock)
+
+            // Step 3: Fund destination escrow on Injective using your custom contract
+            const address2 = "inj12nnymkfwlr6c6c5ksmrq29nlh4x0pmls6xmkc9"
+            console.log(`[${dstChainId}] Funding Injective atomic swap contract`)
+            await injective.fund_dst_escrow_with_params(
+                secretBytes, // Pass the raw secret to generate the hash
+                fillAmount.toString(),
+                address2, // recipient (user's Injective address)
+                90_000_000 // expiry height
+            )
+
+            // Step 4: Wait for finality lock to pass
+            await increaseTime(11)
+
+            // Step 5: User claims funds on Injective by revealing the secret
+            console.log(`[${dstChainId}] User claiming funds on Injective`)
+
+           // await injective.fund_dst_escrow()
             /*
             const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(
                 resolverContract.deploySrc(
