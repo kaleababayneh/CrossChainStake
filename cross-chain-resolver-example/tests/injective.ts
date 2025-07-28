@@ -37,7 +37,7 @@ const cusdcAddress = process.env.CUSDC_CONTRACT_ADDRESS as string
 
 const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
-const SWAP_ID = 'swap-02337772081' // e.g. 'swap-cusdc-001'
+const SWAP_ID = 'swap-02337775552081' // e.g. 'swap-cusdc-001'
 export async function initializeSwapLedger() {
   const instantiateMsg = {} // Your instantiateMsg is empty
 
@@ -218,12 +218,13 @@ export async function fund_dst_escrow_with_params(
   preimage: string, 
   amount: string, 
   recipient: string, 
-  expiresAtHeight: number
+  expiresAtHeight: number,
+  swapId: string
 ) {
   const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
   console.log(`💰 Funding dst escrow with ${amount} CUSDC from ${address}`)
   
-  const swapId = `swap-${Date.now()}` // Generate unique swap ID
+  
   
   const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,

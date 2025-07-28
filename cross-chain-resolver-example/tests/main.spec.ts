@@ -155,7 +155,7 @@ describe('Resolving example', () => {
   
         it('should swap Base USDC -> Aptos MYTOKEN. Single fill only ', async () => {
            
-
+            const swapId = `swap-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex')) // This will automatically include "0x" prefix
             const secret = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
@@ -251,7 +251,8 @@ describe('Resolving example', () => {
                 secretBytes, // Pass the raw secret to generate the hash
                 fillAmount.toString(),
                 address2, // recipient (user's Injective address)
-                90_000_000 // expiry height
+                90_000_000, // expiry height
+                swapId
             )
 
             // Step 4: Wait for finality lock to pass
@@ -260,6 +261,24 @@ describe('Resolving example', () => {
             // Step 5: User claims funds on Injective by revealing the secret
             console.log(`[${dstChainId}] User claiming funds on Injective`)
 
+            await injective.claim_funds_with_params(
+               swapId,
+                secretBytes // raw secret as preimage
+            )
+            
+            // Step 6: Resolver withdraws from EVM source escrow using the same secret
+            const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
+            const srcEscrowAddress = new Sdk.EscrowFactory(new Address(src.escrowFactory)).getSrcEscrowAddress(
+                srcEscrowEvent[0],
+                ESCROW_SRC_IMPLEMENTATION
+            )
+            
+            console.log(`[${srcChainId}] Resolver withdrawing from source escrow ${srcEscrowAddress}`)
+            const {txHash: resolverWithdrawHash} = await srcChainResolver.send(
+                resolverContract.withdraw('src', srcEscrowAddress, secretBytesX, srcEscrowEvent[0])
+            )
+            
+            console.log(`[${srcChainId}] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
            // await injective.fund_dst_escrow()
             /*
             const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(
