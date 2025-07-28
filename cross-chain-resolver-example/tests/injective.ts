@@ -264,6 +264,9 @@ export async function fund_dst_escrow_with_params(
   })
   console.log("msggg", msg)
   const tx = await broadcaster.broadcast({ msgs: msg })
+
+  await new Promise(resolve => setTimeout(resolve, 2000))
+
   
   console.log('✅ Destination escrow funded on Injective')
   console.log('Tx Hash:', tx.txHash)
