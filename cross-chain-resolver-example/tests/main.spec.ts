@@ -42,6 +42,7 @@ const resolverPk = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cd
 const injectiveUserPk = "snap half peasant letter empty kid cement vast comic trigger goat speed explain frog busy sand dial quote victory crew detail airport recall chef"
 const injectiveResolverPk = "soda giggle lobster frown sponsor bridge follow firm fashion buddy final this crawl junior burst race differ school pupil bleak above economy toy chunk"
 
+const address2 = "inj12nnymkfwlr6c6c5ksmrq29nlh4x0pmls6xmkc9"
 // eslint-disable-next-line max-lines-per-function
 describe('Resolving example', () => {
     const srcChainId = config.chain.source.chainId
@@ -111,6 +112,24 @@ describe('Resolving example', () => {
             config.chain.source.limitOrderProtocol,
             MaxUint256
         )
+
+
+        // ----------------------------------- //
+
+                // NEW: Fund resolver with USDC for reverse swaps
+        await srcChainResolver.topUpFromDonor(
+            config.chain.source.tokens.USDC.address,
+            config.chain.source.tokens.USDC.donor,
+            parseUnits('2000', 6)
+        )
+        await srcChainResolver.approveToken(
+            config.chain.source.tokens.USDC.address,
+            config.chain.source.limitOrderProtocol,
+            MaxUint256
+        )
+        console.log("Resolver funded and approved USDC")
+
+        // ----------------------------------- //
         // get 2000 USDC for resolver in DST chain
         srcResolverContract = await Wallet.fromAddress(src.resolver, src.provider)
         // fix
@@ -152,8 +171,8 @@ describe('Resolving example', () => {
     //OKAY
     // eslint-disable-next-line max-lines-per-function
     describe('Fill', () => {
-  
-        it('should swap Base USDC -> Aptos MYTOKEN. Single fill only ', async () => {
+  /*
+        it('should swap EVM USDC -> CW20 Injective MYTOKEN. Single fill only ', async () => {
            
             const swapId = `swap-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
@@ -281,91 +300,213 @@ describe('Resolving example', () => {
             console.log(`[${srcChainId}] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
            // await injective.fund_dst_escrow()
             /*
-            const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(
+            // const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(
+            //     resolverContract.deploySrc(
+            //         srcChainId,
+            //         order,
+            //         signature,
+            //         Sdk.TakerTraits.default()
+            //             .setExtension(order.extension)
+            //             .setAmountMode(Sdk.AmountMode.maker)
+            //             .setAmountThreshold(order.takingAmount),
+            //         fillAmount
+            //     )
+            // )
+            
+ 
+            // console.log(`[${srcChainId}]`, `Order ${orderHash} filled for ${fillAmount} in tx ${orderFillHash}`)
+            // const srcEscrowEvent = await srcFactory.getSrcDeployEvent(srcDeployBlock)
+
+           
+
+            // // continue on injective, deposit cash to escrow on dst chain
+            // const dstImmutables = srcEscrowEvent[0]
+            //     .withComplement(srcEscrowEvent[1])
+            //     .withTaker(new Address(resolverContract.dstAddress))
+
+            // console.log(`[${dstChainId}]`, `Depositing ${dstImmutables.amount} for order ${orderHash}`)
+
+            //  // OKAY
+            // if (runNumber === 1) {
+            //     console.log("skipping first run")
+            // } else {
+            //     await injective.fund_dst_escrow()
+            // }
+
+            // // const {txHash: dstDepositHash, blockTimestamp: dstDeployedAt} = await dstChainResolver.send(
+            // //     resolverContract.deployDst(dstImmutables)
+            // // )
+            // // console.log(`[${dstChainId}]`, `Created dst deposit for order ${orderHash} in tx ${dstDepositHash}`)
+            // const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
+            // const ESCROW_DST_IMPLEMENTATION = "ESCROW_DST_IMPLEMENTATION"
+
+            // // OKAY
+
+            //  const srcEscrowAddress = new Sdk.EscrowFactory(new Address(src.escrowFactory)).getSrcEscrowAddress(
+            //     srcEscrowEvent[0],
+            //     ESCROW_SRC_IMPLEMENTATION
+            // )
+
+            // // relayer signals it's safe to share secret
+            // // user shares secret with relayer -> resolver unlocks funds on dst chain
+
+            // await increaseTime(11)
+            // // unlock funds on dst chain for user
+
+            // if (runNumber === 1) {
+            //     console.log("skipping first run")
+            // } else {
+            //     await injective.claim_funds() // unhardcode params
+            // }
+
+            //             // withdraw funds from src chain for resolver
+            // console.log(`[${srcChainId}]`, `Withdrawing funds for resolver from ${srcEscrowAddress}`)
+            // if (runNumber === 1) {
+            //     await expect(srcChainResolver.send(resolverContract.withdraw('src', srcEscrowAddress, secret, srcEscrowEvent[0]) )).rejects.toThrow()
+            // } else {
+            //     const {txHash: resolverWithdrawHash} = await srcChainResolver.send(
+            //         resolverContract.withdraw('src', srcEscrowAddress, secret, srcEscrowEvent[0])
+            //     )
+            //     console.log(
+            //         `[${srcChainId}]`,
+            //         `Withdrew funds for resolver from ${srcEscrowAddress} to ${src.resolver} in tx https://base.blockscout.com/tx/${resolverWithdrawHash}`
+            //     )
+            // }
+            // // const dstEscrowAddress = new Sdk.EscrowFactory(new Address(dst.escrowFactory)).getDstEscrowAddress(
+            // //     srcEscrowEvent[0],
+            // //     srcEscrowEvent[1],
+            // //     dstDeployedAt,
+            // //     new Address(resolverContract.dstAddress),
+            // //     ESCROW_DST_IMPLEMENTATION
+            // // )
+
+           
+            
+
+        }) 
+        */
+        it('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
+            const swapId = `swip-${Date.now()}`
+            const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+            const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex'))
+            const secret = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
+        
+            // Step 1: User creates atomic swap on Injective first
+            console.log(`[${dstChainId}] User creating atomic swap on Injective`)
+            
+            await injective.fund_dst_escrow_with_params(
+                secretBytes, 
+                "1000000", // 1 CUSDC (6 decimals)
+                address2, // EVM user address as recipient
+                90_000_000, // expiry height
+                swapId
+            )
+        
+            // Step 2: Create order where USER is maker, but RESOLVER provides the funds
+            // This maintains the correct roles for the resolver contract
+            console.log(`[${srcChainId}] Creating EVM order for reverse flow`)
+            
+            const resolverContract = new Resolver(src.resolver, dst.resolver)
+            
+            // Create order where user is maker (even though resolver provides funds)
+            const reverseOrder = Sdk.CrossChainOrder.new(
+                new Address(src.escrowFactory),
+                {
+                    salt: Sdk.randBigInt(1000n),
+                    maker: new Address(await srcChainUser.getAddress()), // User is maker
+                    makingAmount: parseUnits('1', 6), // 1 USDC  
+                    takingAmount: parseUnits('1', 6), // 1 CUSDC equivalent
+                    makerAsset: new Address(config.chain.source.tokens.USDC.address),
+                    takerAsset: new Address(config.chain.source.tokens.USDC.address) // Dummy
+                },
+                {
+                    hashLock: Sdk.HashLock.forSingleFill(secretBytesX),
+                    timeLocks: Sdk.TimeLocks.new({
+                        srcWithdrawal: 10n,
+                        srcPublicWithdrawal: 120n,
+                        srcCancellation: 121n,
+                        srcPublicCancellation: 122n,
+                        dstWithdrawal: 10n,
+                        dstPublicWithdrawal: 100n,
+                        dstCancellation: 101n
+                    }),
+                    srcChainId: Sdk.NetworkEnum.ETHEREUM,
+                    dstChainId: Sdk.NetworkEnum.COINBASE,
+                    srcSafetyDeposit: parseEther('0.001'),
+                    dstSafetyDeposit: parseEther('0.001')
+                },
+                {
+                    auction: new Sdk.AuctionDetails({
+                        initialRateBump: 0,
+                        points: [],
+                        duration: 120n,
+                        startTime: srcTimestamp
+                    }),
+                    whitelist: [
+                        {
+                            address: new Address(src.resolver), // Resolver can fill
+                            allowFrom: 0n
+                        }
+                    ],
+                    resolvingStartTime: 0n
+                },
+                {
+                    nonce: Sdk.randBigInt(UINT_40_MAX),
+                    allowPartialFills: false,
+                    allowMultipleFills: false
+                }
+            )
+        
+            // Step 3: User signs the order (but won't provide funds)
+            const userSignature = await srcChainUser.signOrder(srcChainId, reverseOrder)
+        
+            // Step 4: Resolver fills the order (providing USDC)
+            console.log(`[${srcChainId}] Resolver filling reverse order`)
+            
+            const {txHash: evmEscrowHash, blockHash: evmDeployBlock} = await srcChainResolver.send(
                 resolverContract.deploySrc(
                     srcChainId,
-                    order,
-                    signature,
+                    reverseOrder,
+                    userSignature,
                     Sdk.TakerTraits.default()
-                        .setExtension(order.extension)
+                        .setExtension(reverseOrder.extension)
                         .setAmountMode(Sdk.AmountMode.maker)
-                        .setAmountThreshold(order.takingAmount),
-                    fillAmount
+                        .setAmountThreshold(reverseOrder.takingAmount),
+                    reverseOrder.makingAmount
                 )
             )
             
- 
-            console.log(`[${srcChainId}]`, `Order ${orderHash} filled for ${fillAmount} in tx ${orderFillHash}`)
-            const srcEscrowEvent = await srcFactory.getSrcDeployEvent(srcDeployBlock)
-
-           
-
-            // continue on injective, deposit cash to escrow on dst chain
-            const dstImmutables = srcEscrowEvent[0]
-                .withComplement(srcEscrowEvent[1])
-                .withTaker(new Address(resolverContract.dstAddress))
-
-            console.log(`[${dstChainId}]`, `Depositing ${dstImmutables.amount} for order ${orderHash}`)
-
-             // OKAY
-            if (runNumber === 1) {
-                console.log("skipping first run")
-            } else {
-                await injective.fund_dst_escrow()
-            }
-
-            // const {txHash: dstDepositHash, blockTimestamp: dstDeployedAt} = await dstChainResolver.send(
-            //     resolverContract.deployDst(dstImmutables)
-            // )
-            // console.log(`[${dstChainId}]`, `Created dst deposit for order ${orderHash} in tx ${dstDepositHash}`)
+            console.log(`[${srcChainId}] EVM escrow deployed in tx ${evmEscrowHash}`)
+            const evmEscrowEvent = await srcFactory.getSrcDeployEvent(evmDeployBlock)
+        
+            // Step 5: Wait for finality
+            await increaseTime(11)
+        
+            // Step 6: User claims USDC from EVM by revealing the secret
+            console.log(`[${srcChainId}] User claiming USDC from EVM escrow`)
+            
             const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
-            const ESCROW_DST_IMPLEMENTATION = "ESCROW_DST_IMPLEMENTATION"
-
-            // OKAY
-
-             const srcEscrowAddress = new Sdk.EscrowFactory(new Address(src.escrowFactory)).getSrcEscrowAddress(
-                srcEscrowEvent[0],
+            const evmEscrowAddress = new Sdk.EscrowFactory(new Address(src.escrowFactory)).getSrcEscrowAddress(
+                evmEscrowEvent[0],
                 ESCROW_SRC_IMPLEMENTATION
             )
-
-            // relayer signals it's safe to share secret
-            // user shares secret with relayer -> resolver unlocks funds on dst chain
-
-            await increaseTime(11)
-            // unlock funds on dst chain for user
-
-            if (runNumber === 1) {
-                console.log("skipping first run")
-            } else {
-                await injective.claim_funds() // unhardcode params
-            }
-
-                        // withdraw funds from src chain for resolver
-            console.log(`[${srcChainId}]`, `Withdrawing funds for resolver from ${srcEscrowAddress}`)
-            if (runNumber === 1) {
-                await expect(srcChainResolver.send(resolverContract.withdraw('src', srcEscrowAddress, secret, srcEscrowEvent[0]) )).rejects.toThrow()
-            } else {
-                const {txHash: resolverWithdrawHash} = await srcChainResolver.send(
-                    resolverContract.withdraw('src', srcEscrowAddress, secret, srcEscrowEvent[0])
-                )
-                console.log(
-                    `[${srcChainId}]`,
-                    `Withdrew funds for resolver from ${srcEscrowAddress} to ${src.resolver} in tx https://base.blockscout.com/tx/${resolverWithdrawHash}`
-                )
-            }
-            // const dstEscrowAddress = new Sdk.EscrowFactory(new Address(dst.escrowFactory)).getDstEscrowAddress(
-            //     srcEscrowEvent[0],
-            //     srcEscrowEvent[1],
-            //     dstDeployedAt,
-            //     new Address(resolverContract.dstAddress),
-            //     ESCROW_DST_IMPLEMENTATION
-            // )
-
-           
-            */
-
-        }) 
-
+            
+            const {txHash: userClaimHash} = await srcChainUser.send(
+                resolverContract.withdraw('src', evmEscrowAddress, secretBytesX, evmEscrowEvent[0])
+            )
+            
+            console.log(`[${srcChainId}] User claimed USDC in tx ${userClaimHash}`)
+        
+            // Step 7: Resolver claims CUSDC from Injective using the revealed secret
+            console.log(`[${dstChainId}] Resolver claiming CUSDC from Injective`)
+            
+            await injective.claim_funds_with_params_resolver(
+                swapId,
+                secretBytes
+            )
+            
+            console.log(`✅ Reverse swap completed: Injective CUSDC → EVM USDC`)
+        })
         // it('should swap Ethereum USDC -> Bsc USDC. Multiple fills. Fill 100%', async () => {
         //     const initialBalances = await getBalances(
         //         config.chain.source.tokens.USDC.address,

@@ -255,14 +255,14 @@ export async function fund_dst_escrow_with_params(
           msg: Buffer.from(JSON.stringify(escrowMsg)).toString('base64'),
       },
   }
-
+  console.log("cw20Msg", cw20Msg)
   const msg = MsgExecuteContractCompat.fromJSON({
       sender: address,
       contractAddress: cusdcAddress,
       msg: cw20Msg,
       funds: [],
   })
-
+  console.log("msggg", msg)
   const tx = await broadcaster.broadcast({ msgs: msg })
   
   console.log('✅ Destination escrow funded on Injective')
@@ -303,6 +303,42 @@ export async function claim_funds_with_params(swapId: string, preimage: string) 
   const tx = await broadcaster.broadcast({ msgs: msg })
   
   console.log('✅ CUSDC successfully claimed!')
+  console.log('Tx Hash:', tx.txHash)
+  
+  return tx.txHash
+}
+
+export async function claim_funds_with_params_resolver(swapId: string, preimage: string) {
+  console.log(`🔓 Resolver claiming CUSDC from swap "${swapId}" from ${address}`) // Note: using wallet (resolver), not wallet2 (user)
+  
+  const broadcaster = new MsgBroadcasterWithPk({
+      network: Network.Testnet,
+      chainId: ChainId.Testnet,
+      privateKey: wallet, // Resolver wallet, not user wallet
+      endpoints: {
+          grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
+          rest: 'https://testnet.sentry.lcd.injective.network',
+          indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
+      },
+  })
+
+  const executeMsg = {
+      release: {
+          id: swapId,
+          preimage,
+      },
+  }
+
+  const msg = MsgExecuteContractCompat.fromJSON({
+      sender: address, // Resolver address
+      contractAddress,
+      msg: executeMsg,
+      funds: [],
+  })
+
+  const tx = await broadcaster.broadcast({ msgs: msg })
+  
+  console.log('✅ Resolver successfully claimed CUSDC!')
   console.log('Tx Hash:', tx.txHash)
   
   return tx.txHash
