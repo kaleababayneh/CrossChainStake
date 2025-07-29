@@ -7,8 +7,6 @@ import {
   PrivateKey,
   MsgBroadcasterWithPk,
 } from '@injectivelabs/sdk-ts'
-import { getNetworkInfo } from '@injectivelabs/networks'
-import { toUtf8, toBase64 } from '@cosmjs/encoding'
 import { keccak256 } from 'ethers'
 import * as dotenv from 'dotenv'
 import {  Network } from '@injectivelabs/networks'
@@ -90,31 +88,33 @@ export async function anounce_order() {
   
     // This is the message that the CW20 token contract expects
  
-    const cw20SendMsg = {
-        send: {
-          contract: contractAddress,
-          amount: '10000000', // 10 CUSDC (6 decimals)
-          msg: Buffer.from(JSON.stringify({
-            create: {
-              id: 'swap0031217389',
-              hash,
-              recipient: recipientAddress,
-              expires: {
-                at_height: expiresAtHeight
-              }
-            }
-          })).toString('base64'),
+    
+    const executeMsg = {
+      create: {
+        id: swapId,
+        hash,
+        recipient: recipientAddress,
+        expires: {
+          at_height: expiresAtHeight
         }
       }
-    
+    }
+
+      
+    const funds = [{
+      amount: '10000000000000000', // 0.001 INJ in wei (18 decimals)
+      denom: 'inj'
+    }]
   
+
     const msg = MsgExecuteContractCompat.fromJSON({
       sender: address,
-      contractAddress: cusdcAddress, // CW20 token address
-      msg: cw20SendMsg,
-      funds: [], // no native funds sent
+      contractAddress,
+      msg: executeMsg,
+      funds,
     })
   
+
     const tx = await broadcaster.broadcast({
       msgs: msg,
     })
@@ -143,7 +143,7 @@ const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e
 
   const expiresAtHeight = 90_000_000
 
-  const escrowMsg = {
+  const executeMsg = {
     create: {
       id: swapId,
       hash,
@@ -154,19 +154,16 @@ const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e
     },
   }
 
-  const cw20Msg = {
-    send: {
-      contract: contractAddress, // 🧠 Your swap contract address
-      amount: '10000000',        // 💰 10 CUSDC (decimals = 6)
-      msg: Buffer.from(JSON.stringify(escrowMsg)).toString('base64'),
-    },
-  }
+  const funds = [{
+    amount: '10000000000000000', // 0.001 INJ (18 decimals)
+    denom: 'inj',
+  }]
 
   const msg = MsgExecuteContractCompat.fromJSON({
     sender: address,
-    contractAddress: cusdcAddress, // 🪙 CUSDC CW20 contract
-    msg: cw20Msg,
-    funds: [], // no native INJ sent
+    contractAddress, // 💡 Your atomic swap contract address
+    msg: executeMsg,
+    funds,
   })
 
   const tx = await broadcaster.broadcast({ msgs: msg })
@@ -201,12 +198,13 @@ export async function claim_funds() {
   
     const msg = MsgExecuteContractCompat.fromJSON({
       sender: address2,
-      contractAddress, // 👈 your atomic swap contract address
+      contractAddress, // your atomic swap contract address
       msg: executeMsg,
-      funds: [], // 👈 no funds sent when claiming
+      funds: [], // no funds sent during release
     })
   
     const tx = await broadcaster.broadcast({ msgs: msg })
+  
   
     console.log('✅ CUSDC successfully claimed!')
     console.log('Tx Hash:', tx.txHash)
@@ -237,32 +235,30 @@ export async function fund_dst_escrow_with_params(
       },
   })
 
-  const escrowMsg = {
-      create: {
-          id: swapId,
-          hash,
-          recipient,
-          expires: {
-              at_height: expiresAtHeight,
-          },
+  const executeMsg = {
+    create: {
+      id: swapId,
+      hash,
+      recipient,
+      expires: {
+        at_height: expiresAtHeight,
       },
+    },
   }
 
-  const cw20Msg = {
-      send: {
-          contract: contractAddress,
-          amount,
-          msg: Buffer.from(JSON.stringify(escrowMsg)).toString('base64'),
-      },
-  }
-  console.log("cw20Msg", cw20Msg)
   const msg = MsgExecuteContractCompat.fromJSON({
-      sender: address,
-      contractAddress: cusdcAddress,
-      msg: cw20Msg,
-      funds: [],
+    sender: address,
+    contractAddress, // your swap contract address
+    msg: executeMsg,
+    funds: [
+      {
+        amount: amount, // native INJ amount in uinj
+        denom: 'inj',
+      },
+    ],
   })
-  console.log("msggg", msg)
+
+
   const tx = await broadcaster.broadcast({ msgs: msg })
 
   await new Promise(resolve => setTimeout(resolve, 2000))
@@ -290,22 +286,22 @@ export async function claim_funds_with_params(swapId: string, preimage: string) 
   })
 
   const executeMsg = {
-      release: {
-          id: swapId,
-          preimage,
-      },
+    release: {
+      id: swapId,
+      preimage,
+    },
   }
 
   const msg = MsgExecuteContractCompat.fromJSON({
-      sender: address2,
-      contractAddress,
-      msg: executeMsg,
-      funds: [],
+    sender: address2,
+    contractAddress, // your escrow contract
+    msg: executeMsg,
+    funds: [], // nothing is sent; we're just unlocking the escrow
   })
 
   const tx = await broadcaster.broadcast({ msgs: msg })
-  
-  console.log('✅ CUSDC successfully claimed!')
+
+  console.log('✅ Native INJ successfully claimed!')
   console.log('Tx Hash:', tx.txHash)
   
   return tx.txHash
@@ -326,23 +322,23 @@ export async function claim_funds_with_params_resolver(swapId: string, preimage:
   })
 
   const executeMsg = {
-      release: {
-          id: swapId,
-          preimage,
-      },
+    release: {
+      id: swapId,
+      preimage,
+    },
   }
 
   const msg = MsgExecuteContractCompat.fromJSON({
-      sender: address, // Resolver address
-      contractAddress,
-      msg: executeMsg,
-      funds: [],
+    sender: address, // Resolver address
+    contractAddress, // Escrow contract
+    msg: executeMsg,
+    funds: [], // Nothing to send — just unlocking escrow
   })
 
   const tx = await broadcaster.broadcast({ msgs: msg })
-  
-  console.log('✅ Resolver successfully claimed CUSDC!')
+
+  console.log('✅ Resolver successfully claimed native INJ!')
   console.log('Tx Hash:', tx.txHash)
-  
+
   return tx.txHash
 }
