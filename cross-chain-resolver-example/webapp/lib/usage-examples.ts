@@ -1,6 +1,7 @@
 /**
- * Examples of how to use the new CosmJS-based balance fetching
- * This demonstrates the multi-chain capabilities
+ * Examples of how to use the new LCD REST API-based balance fetching
+ * Following the pattern from node101-io/stake repository
+ * This demonstrates the multi-chain capabilities using simple HTTP requests
  */
 
 import { 

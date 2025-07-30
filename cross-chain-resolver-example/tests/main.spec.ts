@@ -1,9 +1,6 @@
 import 'dotenv/config'
 import {expect, jest, describe, beforeAll, afterAll, it} from '@jest/globals'
 
-import {createServer, CreateServerReturnType} from 'prool'
-import {anvil} from 'prool/instances'
-
 import Sdk from '@1inch/cross-chain-sdk'
 import {
     computeAddress,
@@ -49,7 +46,6 @@ describe('Resolving example', () => {
     const dstChainId = config.chain.destination.chainId
 
     type EthereumChain = {
-        node?: CreateServerReturnType | undefined
         provider: JsonRpcProvider
         escrowFactory: string
         resolver: string
@@ -894,7 +890,7 @@ async function initInjectiveChain(
   cnf: ChainConfig,
   provider: ChainGrpcWasmApi
 ): Promise<{
-  node?: undefined
+  
   provider: ChainGrpcWasmApi
   escrowFactory: string
   resolver: string
@@ -906,7 +902,7 @@ async function initInjectiveChain(
   console.log(`[${cnf.chainId}]`, `Resolver logic handled off-chain or injected manually.`)
 
   return {
-    node: undefined,
+    
     provider,
     escrowFactory,
     resolver,

@@ -1,7 +1,7 @@
 // Chain configurations for easy extensibility
 export interface ChainConfig {
   chainId: string
-  rpc: string
+  rpc: string // LCD REST API endpoint (not RPC)
   prefix: string
   denom: string
   decimals: number
@@ -27,10 +27,13 @@ export const ETHEREUM_NETWORKS = {
   }
 } as const
 
+// Cosmos chain configurations using LCD REST API endpoints
+// Note: 'rpc' field actually contains LCD REST endpoint URLs, not RPC endpoints
+// LCD endpoints follow format: https://lcd.example.com (without /26657 suffix)
 export const COSMOS_CHAINS: Record<string, ChainConfig> = {
   injective: {
-    chainId: 'injective-1',
-    rpc: 'https://injective-rpc.polkachu.com',
+    chainId: 'injective-888',
+    rpc: 'https://testnet.sentry.lcd.injective.network',
     prefix: 'inj',
     denom: 'inj',
     decimals: 18,
@@ -38,56 +41,16 @@ export const COSMOS_CHAINS: Record<string, ChainConfig> = {
     symbol: 'INJ',
     explorer: 'https://explorer.injective.network'
   },
-  cosmos: {
-    chainId: 'cosmoshub-4',
-    rpc: 'https://cosmos-rpc.polkachu.com',
-    prefix: 'cosmos',
-    denom: 'uatom',
-    decimals: 6,
-    name: 'Cosmos Hub',
-    symbol: 'ATOM',
-    explorer: 'https://mintscan.io/cosmos'
-  },
-  osmosis: {
-    chainId: 'osmosis-1',
-    rpc: 'https://osmosis-rpc.polkachu.com',
-    prefix: 'osmo',
-    denom: 'uosmo',
-    decimals: 6,
-    name: 'Osmosis',
-    symbol: 'OSMO',
-    explorer: 'https://mintscan.io/osmosis'
-  },
-  juno: {
-    chainId: 'juno-1',
-    rpc: 'https://juno-rpc.polkachu.com',
-    prefix: 'juno',
-    denom: 'ujuno',
-    decimals: 6,
-    name: 'Juno',
-    symbol: 'JUNO',
-    explorer: 'https://mintscan.io/juno'
-  },
-  stargaze: {
-    chainId: 'stargaze-1',
-    rpc: 'https://stargaze-rpc.polkachu.com',
-    prefix: 'stars',
-    denom: 'ustars',
-    decimals: 6,
-    name: 'Stargaze',
-    symbol: 'STARS',
-    explorer: 'https://mintscan.io/stargaze'
-  },
-  terra: {
-    chainId: 'phoenix-1',
-    rpc: 'https://terra-rpc.polkachu.com',
-    prefix: 'terra',
-    denom: 'uluna',
-    decimals: 6,
-    name: 'Terra',
-    symbol: 'LUNA',
-    explorer: 'https://finder.terra.money'
-  }
+  // neutron testnet
+  netron: {
+   chainId: 'pion-1',
+   rpc: 'https://neutron-testnet-rpc.polkachu.com',
+   prefix: 'neutron',
+   denom: 'untrn',
+   decimals: 6,
+   name: 'Neutron Protocol',
+   symbol: 'NTRN',
+   }
 }
 
 export type CosmosChain = keyof typeof COSMOS_CHAINS

@@ -21,8 +21,7 @@ interface WalletState {
 const ethereumTokens = [{ symbol: "USDC", name: "USD Coin", logo: "/placeholder.svg?height=24&width=24" }]
 
 const cosmosTokens = [
-  { symbol: "INJ", name: "Injective", logo: "/placeholder.svg?height=24&width=24" },
-  { symbol: "NTRN", name: "Neutron", logo: "/placeholder.svg?height=24&width=24" },
+  { symbol: "INJ", name: "Injective", logo: "/placeholder.svg?height=24&width=24" }
 ]
 
 export default function TokenSwap() {
@@ -98,8 +97,8 @@ export default function TokenSwap() {
   const connectKeplr = async () => {
     if (typeof window !== "undefined" && (window as any).keplr) {
       try {
-        await (window as any).keplr.enable("injective-1")
-        const offlineSigner = (window as any).keplr.getOfflineSigner("injective-1")
+        await (window as any).keplr.enable("injective-888")
+        const offlineSigner = (window as any).keplr.getOfflineSigner("injective-888")
         const accounts = await offlineSigner.getAccounts()
 
         if (accounts.length > 0) {

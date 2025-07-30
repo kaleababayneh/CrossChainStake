@@ -1,7 +1,4 @@
 import { ethers } from 'ethers'
-import { createProtobufRpcClient, QueryClient } from '@cosmjs/stargate'
-import { Tendermint34Client } from '@cosmjs/tendermint-rpc'
-import { QueryClientImpl } from 'cosmjs-types/cosmos/bank/v1beta1/query'
 import { COSMOS_CHAINS, CosmosChain, ETHEREUM_NETWORKS } from './chain-configs'
 
 // USDC contract address on Ethereum mainnet
@@ -40,7 +37,8 @@ export async function fetchUSDCBalance(address: string): Promise<string> {
 }
 
 /**
- * Fetch balance from any Cosmos chain using CosmJS
+ * Fetch balance from any Cosmos chain using LCD REST API
+ * Following the pattern from node101-io/stake repository
  */
 export async function fetchCosmosBalance(
   address: string,
@@ -49,27 +47,37 @@ export async function fetchCosmosBalance(
   try {
     const chainConfig = COSMOS_CHAINS[chain]
     
-    // Connect to Tendermint RPC
-    const tendermint = await Tendermint34Client.connect(chainConfig.rpc)
-    const queryClient = new QueryClient(tendermint)
-    const rpcClient = createProtobufRpcClient(queryClient)
-    const bankQueryService = new QueryClientImpl(rpcClient)
-
-    // Query balance
-    const { balance } = await bankQueryService.Balance({
-      address,
-      denom: chainConfig.denom,
+    // Use LCD REST API endpoint for balance query
+    const balanceUrl = `${chainConfig.rpc}/cosmos/bank/v1beta1/balances/${address}/by_denom?denom=${chainConfig.denom}`
+    
+    const response = await fetch(balanceUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
     })
 
-    if (!balance || !balance.amount) {
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const data = await response.json()
+    
+    // Handle different response formats
+    let balanceAmount = '0'
+    if (data.balance && data.balance.amount) {
+      balanceAmount = data.balance.amount
+    } else if (data.amount) {
+      balanceAmount = data.amount
+    }
+
+    if (!balanceAmount || balanceAmount === '0') {
       return '0.000000'
     }
 
     // Convert from atomic units to human readable format
-    const formattedBalance = (Number(balance.amount) / Math.pow(10, chainConfig.decimals)).toFixed(6)
-    
-    // Clean up the connection
-    tendermint.disconnect()
+    const formattedBalance = (Number(balanceAmount) / Math.pow(10, chainConfig.decimals)).toFixed(6)
     
     return formattedBalance
   } catch (error) {
