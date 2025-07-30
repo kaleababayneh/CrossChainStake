@@ -143,7 +143,7 @@ describe('Resolving example', () => {
     //OKAY
     // eslint-disable-next-line max-lines-per-function
     describe('Fill', () => {
-  /*
+  
         it('should swap ETH USDC -> INJ. Single fill only ', async () => {
             const swapId = `swap-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
@@ -270,7 +270,7 @@ describe('Resolving example', () => {
             
             console.log(`[${srcChainId}] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
            
-        }) */
+        }) 
 
 
   
