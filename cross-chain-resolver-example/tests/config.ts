@@ -4,46 +4,18 @@ import * as process from 'node:process'
 import { create } from 'node:domain'
 import { wrap } from 'node:module'
 
-const bool = z
-    .string()
-    .transform((v) => v.toLowerCase() === 'true')
-    .pipe(z.boolean())
 
-const ConfigSchema = z.object({
-    SRC_CHAIN_RPC: z.string().url(),
-    DST_CHAIN_RPC: z.string().url(),
-    SRC_CHAIN_CREATE_FORK: bool.default('true'),
-    DST_CHAIN_CREATE_FORK: bool.default('true')
-})
-
-const fromEnv = ConfigSchema.parse(process.env)
-
-// export interface InjectiveChainConfig {
-//     chainId: string;
-//     rpc: string;
-//     grpc: string;
-//     rest: string;
-//     prefix: string;
-//     denom: string;
-//     tokens: {
-//         [symbol: string]: {
-//             denom: string;
-//             decimals: number;
-//             peggyAddress?: string; // For Peggy bridge tokens
-//         };
-//     };
-//     mnemonic: string;
-// }
 
 export const config = {
     chain: {
+
         source: {
-            chainId: 1 as const,
-            url: 'https://eth.merkle.io',
-            createFork: true,
+            chainId: 27270,
+            url: "https://rpc.buildbear.io/appalling-thepunisher-3e7a9d1c",
+            createFork: false,
             limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
             wrappedNative: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-            ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+            ownerPrivateKey: '0x8bc5e2d9a1ec77c51fd83dc78622222c8b2f1eadaa361eae31409a702ec21c27',
             tokens: {
                 USDC: {
                     address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
@@ -57,28 +29,15 @@ export const config = {
             createFork: false,
             limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
             wrappedNative: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-            ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+            ownerPrivateKey: '0x8bc5e2d9a1ec77c51fd83dc78622222c8b2f1eadaa361eae31409a702ec21c27',
             tokens: {
                 CUSDC: {
                     address: 'inj1k6hdgvqzws7xr3aa40acacw5egwghhf5kzmwye',
                     donor: 'inj1zrnpc8zf80p6mctwln77wfagrya5ssyfpayx3t'
                 }
             }
-        },
-        destinationa: {
-            chainId: Sdk.NetworkEnum.BINANCE,
-            url: fromEnv.DST_CHAIN_RPC,
-            createFork: true,
-            limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
-            wrappedNative: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
-            ownerPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-            tokens: {
-                USDC: {
-                    address: '0x8965349fb649a33a30cbfda057d8ec2c48abe2a2',
-                    donor: '0x4188663a85C92EEa35b5AD3AA5cA7CeB237C6fe9'
-                }
-            }
         }
+        
     }
 } as const
 
