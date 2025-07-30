@@ -14,9 +14,9 @@
     "morgan": "^1.10.0",
     "dotenv": "^16.3.1",
     "ethers": "^6.13.5",
-    "@injectivelabs/sdk-ts": "^1.15.43",
-    "@injectivelabs/networks": "^1.15.43",
-    "@injectivelabs/ts-types": "^1.15.43"
+    "@injectivelabs/sdk-ts": "^1.15.41",
+    "@injectivelabs/networks": "^1.15.41",
+    "@injectivelabs/ts-types": "^1.15.41"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
