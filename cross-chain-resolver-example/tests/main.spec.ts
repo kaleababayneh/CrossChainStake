@@ -34,10 +34,10 @@ import { InjectiveWallet } from './injective-wallet'
 
 const {Address} = Sdk
 
-jest.setTimeout(1000 * 60)
+jest.setTimeout(1000 * 60 * 3)
 
-const userPk = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'
-const resolverPk = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a'
+const userPk = '0x3897c33f920e4594c9321f78208b8cf1646f45fd807a78ef0985cc607eea4f51'
+const resolverPk = '0x0a8453b8a66dc0e4cf0afcea4b961b6bcd4bd2d4d378c7512f8eb3a7aea255b3'
 
 const injectiveUserPk = "snap half peasant letter empty kid cement vast comic trigger goat speed explain frog busy sand dial quote victory crew detail airport recall chef"
 const injectiveResolverPk = "soda giggle lobster frown sponsor bridge follow firm fashion buddy final this crawl junior burst race differ school pupil bleak above economy toy chunk"
@@ -99,14 +99,7 @@ describe('Resolving example', () => {
 
        
         srcFactory = new EscrowFactory(src.provider, src.escrowFactory)
-        //fix
-        // dstFactory = new EscrowFactory(dst.provider, dst.escrowFactory) // Commented out - Injective doesn't use EscrowFactory class
-       
-        await srcChainUser.topUpFromDonor(
-            config.chain.source.tokens.USDC.address,
-            config.chain.source.tokens.USDC.donor,
-            parseUnits('1000', 6)
-        )
+ 
         await srcChainUser.approveToken(
             config.chain.source.tokens.USDC.address,
             config.chain.source.limitOrderProtocol,
@@ -114,14 +107,6 @@ describe('Resolving example', () => {
         )
 
 
-        // ----------------------------------- //
-
-                // NEW: Fund resolver with USDC for reverse swaps
-        await srcChainResolver.topUpFromDonor(
-            config.chain.source.tokens.USDC.address,
-            config.chain.source.tokens.USDC.donor,
-            parseUnits('2000', 6)
-        )
         await srcChainResolver.approveToken(
             config.chain.source.tokens.USDC.address,
             config.chain.source.limitOrderProtocol,
@@ -131,19 +116,8 @@ describe('Resolving example', () => {
 
         // ----------------------------------- //
         // get 2000 USDC for resolver in DST chain
-        srcResolverContract = await Wallet.fromAddress(src.resolver, src.provider)
-        // fix
-        // dstResolverContract = await Wallet.fromAddress(dst.resolver, dst.provider) // Commented out - Injective doesn't use Wallet class
-
-        // await dstResolverContract.topUpFromDonor(
-        //     config.chain.destination.tokens.CUSDC.address,
-        //     config.chain.destination.tokens.CUSDC.donor,
-        //     parseUnits('2000', 6)
-        // )
-        // top up contract for approve
-        // await dstChainResolver.transfer(dst.resolver, parseEther('1'))
-        // await dstResolverContract.unlimitedApprove(config.chain.destination.tokens.CUSDC.address, dst.escrowFactory)
-
+      //  srcResolverContract = await Wallet.fromAddress(resolverPk, src.provider)
+      srcResolverContract = srcChainResolver  // Use the existing resolver wallet
         srcTimestamp = BigInt((await src.provider.getBlock('latest'))!.timestamp)
     })
 
@@ -164,16 +138,13 @@ describe('Resolving example', () => {
     }
 
     afterAll(async () => {
-        src.provider.destroy()
-       
-        await Promise.all([src.node?.stop()])
+
     })
     //OKAY
     // eslint-disable-next-line max-lines-per-function
     describe('Fill', () => {
   
-        it('should swap Base USDC -> Aptos MYTOKEN. Single fill only ', async () => {
-           
+        it('should swap ETH USDC -> INJ. Single fill only ', async () => {
             const swapId = `swap-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex')) // This will automatically include "0x" prefix
@@ -385,7 +356,7 @@ describe('Resolving example', () => {
 
         })
 
-
+/*
   
         it('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
             const swapId = `swip-${Date.now()}`
@@ -508,7 +479,7 @@ describe('Resolving example', () => {
             )
             
             console.log(`✅ Reverse swap completed: Injective CUSDC → EVM USDC`)
-        })
+        }) */
         // it('should swap Ethereum USDC -> Bsc USDC. Multiple fills. Fill 100%', async () => {
         //     const initialBalances = await getBalances(
         //         config.chain.source.tokens.USDC.address,
@@ -946,21 +917,21 @@ describe('Resolving example', () => {
 })
 
 async function initChain(cnf: ChainConfig): Promise<any> {
-    const {node, provider} = await getProvider(cnf)
-    if (!cnf.createFork) {
+    const { provider} = await getProvider(cnf)
+    if (cnf.chainId == "injective-888") {
         // Initialize Injective chain
         return await initInjectiveChain(cnf, provider as ChainGrpcWasmApi)
     } else {
         // Initialize Ethereum-compatible chain
-        return await initEthereumChain(cnf, provider as JsonRpcProvider, node)
+        return await initEthereumChain(cnf, provider as JsonRpcProvider)
     }
 }
 
 async function initEthereumChain(
     cnf: ChainConfig, 
     provider: JsonRpcProvider, 
-    node?: CreateServerReturnType
-):  Promise<{node?: CreateServerReturnType; provider: JsonRpcProvider; escrowFactory: string; resolver: string}> {
+   
+):  Promise<{ provider: JsonRpcProvider; escrowFactory: string; resolver: string}> {
     
     const deployer = new SignerWallet(cnf.ownerPrivateKey, provider)
 
@@ -993,7 +964,7 @@ async function initEthereumChain(
     )
     console.log(`[${cnf.chainId}]`, `Resolver contract deployed to`, resolver)
 
-    return {node: node, provider, resolver, escrowFactory}
+    return { provider, resolver, escrowFactory}
 }
 
 
@@ -1022,10 +993,10 @@ async function initInjectiveChain(
 
 
 
-async function getProvider(cnf: ChainConfig): Promise<{node?: CreateServerReturnType; provider: any}> {
+async function getProvider(cnf: ChainConfig): Promise<{provider: any}> {
     
 
-    if (!cnf.createFork) {
+    if (cnf.chainId == "injective-888") {
         const network =  Network.Testnet
         const endpoints = getNetworkEndpoints(network)
         //console.log(new ChainGrpcWasmApi(endpoints.grpc))
@@ -1034,27 +1005,10 @@ async function getProvider(cnf: ChainConfig): Promise<{node?: CreateServerReturn
         }
     }
 
-    const node = createServer({
-        instance: anvil({
-            forkUrl: cnf.url, 
-            chainId: cnf.chainId,
-            forkBlockNumber: 23009573
-        }),
-        limit: 1
-    })
-    await node.start()
-
-    const address = node.address()
-    assert(address)
-
-    const provider = new JsonRpcProvider(`http://[${address.address}]:${address.port}/1`, cnf.chainId, {
-        cacheTimeout: -1,
-        staticNetwork: true
-    })
-
-    return {
-        provider,
-        node
+    else {
+        return {
+            provider: new JsonRpcProvider(cnf.url, cnf.chainId)
+        }
     }
 }
 

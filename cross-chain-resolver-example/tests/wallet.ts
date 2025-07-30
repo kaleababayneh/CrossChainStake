@@ -18,9 +18,9 @@ export class Wallet {
     }
 
     public static async fromAddress(address: string, provider: JsonRpcProvider): Promise<Wallet> {
-        await provider.send('anvil_impersonateAccount', [address.toString()])
-
-        const signer = await provider.getSigner(address.toString())
+        console.log("address", address)
+        console.log("provider", provider)
+        const signer = await provider.getSigner(address)
 
         return new Wallet(signer, provider)
     }
