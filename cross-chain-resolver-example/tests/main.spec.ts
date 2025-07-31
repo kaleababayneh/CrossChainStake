@@ -64,14 +64,14 @@ describe('Resolving example', () => {
 
     let srcChainUser: Wallet
     let dstChainUser: InjectiveWallet
+
     let srcChainResolver: Wallet
     let dstChainResolver: InjectiveWallet
 
     let srcFactory: EscrowFactory
-    // fix
-    // let dstFactory: EscrowFactory // Commented out - not used for Injective
+    let dstFactory: EscrowFactory // This will be an escrow contract address on Injective
+
     let srcResolverContract: Wallet
-    // fix  
     let dstResolverContract: Wallet | undefined // Made optional since it's not initialized for Injective
 
     let srcTimestamp: bigint
@@ -85,7 +85,6 @@ describe('Resolving example', () => {
         ;[src, dst] = await Promise.all([initChain(config.chain.source), initChain(config.chain.destination)])
         
         srcChainUser = new Wallet(userPk, src.provider)
-        const injectiveUserPk = "snap half peasant letter empty kid cement vast comic trigger goat speed explain frog busy sand dial quote victory crew detail airport recall chef"
         dstChainUser = new InjectiveWallet(injectiveUserPk)
         
 
@@ -95,13 +94,13 @@ describe('Resolving example', () => {
 
        
         srcFactory = new EscrowFactory(src.provider, src.escrowFactory)
+        //dstFactory = new EscrowFactory(dst.provider, dst.escrowFactory)
  
         await srcChainUser.approveToken(
             config.chain.source.tokens.USDC.address,
             config.chain.source.limitOrderProtocol,
             MaxUint256
         )
-
 
         await srcChainResolver.approveToken(
             config.chain.source.tokens.USDC.address,
@@ -110,33 +109,13 @@ describe('Resolving example', () => {
         )
         console.log("Resolver funded and approved USDC")
 
-        // ----------------------------------- //
-        // get 2000 USDC for resolver in DST chain
-      //  srcResolverContract = await Wallet.fromAddress(resolverPk, src.provider)
-      srcResolverContract = srcChainResolver  // Use the existing resolver wallet
+     
+        srcResolverContract = srcChainResolver  // Use the existing resolver wallet
+        //dstResolverContract = dstChainResolver  // Use the existing resolver wallet
+
         srcTimestamp = BigInt((await src.provider.getBlock('latest'))!.timestamp)
     })
 
-    async function getBalances(
-        srcToken: string,
-        dstToken: string
-    ): Promise<{src: {user: bigint; resolver: bigint}; dst: {user: bigint; resolver: bigint}}> {
-        return {
-            src: {
-                user: await srcChainUser.tokenBalance(srcToken),
-                resolver: await srcResolverContract.tokenBalance(srcToken)
-            },
-            dst: {
-                user: 0n, // await dstChainUser.getTokenBalance(dstToken), // Commented out due to type mismatch
-                resolver: 0n // await dstResolverContract.tokenBalance(dstToken) // Commented out since dstResolverContract is not initialized
-            }
-        }
-    }
-
-    afterAll(async () => {
-
-    })
-    //OKAY
     // eslint-disable-next-line max-lines-per-function
     describe('Fill', () => {
   
@@ -146,7 +125,6 @@ describe('Resolving example', () => {
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex')) // This will automatically include "0x" prefix
             const secret = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
 
-
              const order = Sdk.CrossChainOrder.new(
                 new Address(src.escrowFactory),
                 {
@@ -155,7 +133,7 @@ describe('Resolving example', () => {
                     makingAmount: parseUnits('1', 6),
                     takingAmount: parseUnits('1', 6),
                     makerAsset: new Address(config.chain.source.tokens.USDC.address),
-                    takerAsset: new Address(config.chain.source.tokens.USDC.address) // DUMMY SHOULD BE CUSDC
+                    takerAsset: new Address(config.chain.source.tokens.USDC.address) 
                 },
                 {
                     hashLock: Sdk.HashLock.forSingleFill(secretBytesX),
@@ -194,8 +172,6 @@ describe('Resolving example', () => {
                     allowMultipleFills: false
                 }
             )
-
-
             
             const signature = await srcChainUser.signOrder(srcChainId, order)
             const orderHash = order.getOrderHash(srcChainId)
@@ -702,7 +678,6 @@ describe('Resolving example', () => {
         //     expect(initialBalances.dst.resolver - resultBalances.dst.resolver).toBe(dstAmount)
         // })
     })
-
     // describe('Cancel', () => {
     //     it('should cancel swap Ethereum USDC -> Bsc USDC', async () => {
     //         const initialBalances = await getBalances(
@@ -836,11 +811,10 @@ describe('Resolving example', () => {
 
 async function initChain(cnf: ChainConfig): Promise<any> {
     const { provider} = await getProvider(cnf)
+
     if (cnf.chainId == "injective-888") {
-        // Initialize Injective chain
         return await initInjectiveChain(cnf, provider as ChainGrpcWasmApi)
     } else {
-        // Initialize Ethereum-compatible chain
         return await initEthereumChain(cnf, provider as JsonRpcProvider)
     }
 }
@@ -913,16 +887,13 @@ async function initInjectiveChain(
 
 async function getProvider(cnf: ChainConfig): Promise<{provider: any}> {
     
-
     if (cnf.chainId == "injective-888") {
         const network =  Network.Testnet
         const endpoints = getNetworkEndpoints(network)
-        //console.log(new ChainGrpcWasmApi(endpoints.grpc))
         return {
             provider: new ChainGrpcWasmApi(endpoints.grpc)
         }
     }
-
     else {
         return {
             provider: new JsonRpcProvider(cnf.url, cnf.chainId)
