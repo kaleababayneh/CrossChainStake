@@ -40,7 +40,9 @@ const injectiveUserPk = "snap half peasant letter empty kid cement vast comic tr
 const injectiveResolverPk = "soda giggle lobster frown sponsor bridge follow firm fashion buddy final this crawl junior burst race differ school pupil bleak above economy toy chunk"
 
 const address2 = "inj12nnymkfwlr6c6c5ksmrq29nlh4x0pmls6xmkc9"
+const resolverAddress = "inj1rfhgjga07nkn5kmw7macwathepxew3rfndtw45"
 // eslint-disable-next-line max-lines-per-function
+
 describe('Resolving example', () => {
     const srcChainId = config.chain.source.chainId
     const dstChainId = config.chain.destination.chainId
@@ -247,7 +249,7 @@ describe('Resolving example', () => {
 
 
   
-        it.skip('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
+        it('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
             const swapId = `swip-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex'))
@@ -365,7 +367,7 @@ describe('Resolving example', () => {
             await injective.claim_funds_with_params_resolver(
                 swapId,
                 secretBytes,
-                address2
+                resolverAddress
             )
             
             console.log(`✅ Reverse swap completed: Injective CUSDC → EVM USDC`)

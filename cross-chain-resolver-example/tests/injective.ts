@@ -28,12 +28,10 @@ const contractLabel = 'CW20 Atomic Swap'
 const gas = { gas: 2_000_000, gasPrice: 500_000_000 } // adjust if needed
 const recipientAddress = process.env.RECIPIENT        // e.g. 'inj1...'
 const contractAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS as string 
-const cusdcAddress = process.env.CUSDC_CONTRACT_ADDRESS as string
-
 
 const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
-const SWAP_ID = 'swap-02337775552081' // e.g. 'swap-cusdc-001'
+
 export async function initializeSwapLedger() {
   const instantiateMsg = {} // Your instantiateMsg is empty
 
@@ -121,95 +119,6 @@ export async function anounce_order() {
     console.log('Tx Hash:', tx.txHash)
     console.log('Hash (SHA256):', hash)
 }
-
-export async function fund_dst_escrow() {
-const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-   const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
-  console.log(`💰 Funding dst escrow with CUSDC from ${address}`)
-  const swapId = SWAP_ID
-
-  const broadcaster = new MsgBroadcasterWithPk({
-    network: Network.Testnet,
-    chainId: ChainId.Testnet,
-    privateKey: wallet,
-    endpoints: {
-      grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
-      rest: 'https://testnet.sentry.lcd.injective.network',
-      indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
-    },
-  })
-
-  const expiresAtHeight = 90_000_000
-
-  const executeMsg = {
-    create: {
-      id: swapId,
-      hash,
-      recipient: recipientAddress,
-      expires: {
-        at_height: expiresAtHeight,
-      },
-    },
-  }
-
-  const funds = [{
-    amount: '10000000000000000', // 0.001 INJ (18 decimals)
-    denom: 'inj',
-  }]
-
-  const msg = MsgExecuteContractCompat.fromJSON({
-    sender: address,
-    contractAddress, // 💡 Your atomic swap contract address
-    msg: executeMsg,
-    funds,
-  })
-
-  const tx = await broadcaster.broadcast({ msgs: msg })
-
-  console.log('✅ Counterparty funded dst escrow with CUSDC')
-  console.log('Tx Hash:', tx.txHash)
-  console.log('Hash (SHA256):', hash)
-}
-
-export async function claim_funds() {
-    const swapId = SWAP_ID // e.g. 'swap-cusdc-001'
-    const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-    console.log(`🔓 Claiming CUSDC from swap "${swapId}" by revealing preimage from ${address}`)
-  
-    const broadcaster = new MsgBroadcasterWithPk({
-      network: Network.Testnet,
-      chainId: ChainId.Testnet,
-      privateKey: wallet,
-      endpoints: {
-        grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
-        rest: 'https://testnet.sentry.lcd.injective.network',
-        indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
-      },
-    })
-  
-    const executeMsg = {
-      release: {
-        id: swapId,
-        preimage,
-        recipient: recipientAddress,
-      },
-    }
-  
-    const msg = MsgExecuteContractCompat.fromJSON({
-      sender: address,
-      contractAddress, // your atomic swap contract address
-      msg: executeMsg,
-      funds: [], // no funds sent during release
-    })
-  
-    const tx = await broadcaster.broadcast({ msgs: msg })
-  
-  
-    console.log('✅ CUSDC successfully claimed!')
-    console.log('Tx Hash:', tx.txHash)
-    console.log('Preimage:', preimage)
-}
-
 
 export async function fund_dst_escrow_with_params(
   preimage: string, 
