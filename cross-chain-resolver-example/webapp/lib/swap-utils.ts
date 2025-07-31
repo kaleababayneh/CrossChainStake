@@ -23,7 +23,10 @@ export interface SwapResponse {
   injAmount: string
   exchangeRate: number
   message: string
-  destinationTxHash?: string
+  destinationFundingTx?: string // Injective funding transaction
+  sourceDeploymentTx?: string // BuildBear escrow deployment  
+  userClaimTx?: string // Injective claim transaction
+  resolverWithdrawalTx?: string // BuildBear resolver withdrawal
   error?: string
   details?: any
 }
@@ -211,18 +214,23 @@ export async function initiateSwap(params: SwapParams): Promise<SwapResponse> {
       throw new Error(result.error || 'Swap initiation failed')
     }
 
+    // Important: The API returns a plain object for `order`. We must use the
+    // original `order` object which is an instance of `Sdk.CrossChainOrder`
+    // and has all the necessary methods. `...result` would overwrite it.
+    const { order: _, ...restResult } = result
+
     return {
       success: true,
       swapId,
       orderHash,
       secretBytes,
-      order, // Return the actual order object
+      order, // Return the original class instance
       signature,
       fillAmount: fromAmount,
       injAmount,
       exchangeRate: EXCHANGE_RATE,
       message: 'CrossChainOrder created and destination funded. Ready to deploy source escrow.',
-      ...result
+      ...restResult
     }
 
   } catch (error) {
@@ -231,12 +239,8 @@ export async function initiateSwap(params: SwapParams): Promise<SwapResponse> {
   }
 }
 
-/**
- * Approve USDC for the resolver to execute deploySrc (like test setup)
- * User only approves - resolver will execute the actual transaction
- */
 export async function deploySourceEscrow(
-  orderData: any, // Plain object from API, not CrossChainOrder instance
+  order: Sdk.CrossChainOrder,
   signature: string,
   fillAmount: string
 ): Promise<string> {
@@ -277,60 +281,38 @@ export async function deploySourceEscrow(
     // Approve USDC to LimitOrderProtocol if needed (like in test)
     if (currentAllowance < fillAmountBigInt) {
       console.log('Approving USDC to LimitOrderProtocol for resolver to use...')
-      const approveTx = await usdcContract.approve(limitOrderProtocol, fillAmountBigInt)
+      const approveTx = await usdcContract.approve(limitOrderProtocol, ethers.MaxUint256) // Approve max
       const receipt = await approveTx.wait()
       console.log('USDC approval confirmed:', receipt.hash)
-      
-      // Now call the API for resolver to execute deploySrc
-      console.log('Requesting resolver to execute deploySrc transaction...')
-      const deployResponse = await fetch('/api/deploy-source', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          orderData,
-          signature,
-          fillAmount,
-          userAddress
-        })
-      })
-
-      const deployResult = await deployResponse.json()
-      
-      if (!deployResponse.ok) {
-        throw new Error(deployResult.error || 'Resolver deployment failed')
-      }
-
-      console.log('Resolver executed deploySrc:', deployResult.txHash)
-      return deployResult.txHash
-    } else {
-      console.log('Sufficient allowance exists, requesting resolver to execute deploySrc...')
-      
-      // Call the API for resolver to execute deploySrc
-      const deployResponse = await fetch('/api/deploy-source', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          orderData,
-          signature,
-          fillAmount,
-          userAddress
-        })
-      })
-
-      const deployResult = await deployResponse.json()
-      
-      if (!deployResponse.ok) {
-        throw new Error(deployResult.error || 'Resolver deployment failed')
-      }
-
-      console.log('Resolver executed deploySrc:', deployResult.txHash)
-      return deployResult.txHash
     }
 
+    // Now call the API for resolver to execute deploySrc
+    console.log('Requesting resolver to execute deploySrc transaction...')
+    const deployResponse = await fetch('/api/deploy-source', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        orderData: order.build(),
+        signature,
+        fillAmount,
+        userAddress,
+        extensionData: order.extension.encode(),
+        safetyDeposit: order.escrowExtension.srcSafetyDeposit.toString(),
+        takingAmount: order.takingAmount.toString()
+      })
+    })
+
+    const deployResult = await deployResponse.json()
+    
+    if (!deployResponse.ok) {
+      throw new Error(deployResult.error || 'Resolver deployment failed')
+    }
+
+    console.log('Resolver executed deploySrc:', deployResult.txHash)
+    return deployResult.txHash
+    
   } catch (error) {
     console.error('Error setting up source escrow deployment:', error)
     throw error

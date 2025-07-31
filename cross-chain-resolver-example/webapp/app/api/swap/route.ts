@@ -6,6 +6,8 @@ import {
   PrivateKey,
   MsgBroadcasterWithPk,
 } from '@injectivelabs/sdk-ts'
+
+
 import { Network } from '@injectivelabs/networks'
 import { ChainId } from '@injectivelabs/ts-types'
 
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest) {
         secretBytes,
         order: order, // Return the serialized order back
         signature,
-        destinationTxHash: tx.txHash,
+        destinationFundingTx: tx.txHash, // Injective funding transaction
         injectiveContract: contractAddress,
         injAmount,
         fromAmount,

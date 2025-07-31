@@ -5,17 +5,14 @@ import Sdk from '@1inch/cross-chain-sdk'
 import {
     computeAddress,
     ContractFactory,
-    ethers,
     JsonRpcProvider,
     MaxUint256,
     parseEther,
     parseUnits,
-    randomBytes,
     Wallet as SignerWallet
 } from 'ethers'
 
 import {uint8ArrayToHex, UINT_40_MAX} from '@1inch/byte-utils'
-import assert from 'node:assert'
 import {ChainConfig, config} from './config'
 import {Wallet} from './wallet'
 import {Resolver} from './resolver'
@@ -183,15 +180,11 @@ describe('Resolving example', () => {
             console.log(`[${srcChainId}]`, `Filling order ${orderHash}`)
             const fillAmount = order.makingAmount
 
-            console.log("src.resolver", src.resolver)
-            console.log("dst.resolver", dst.resolver)
-            console.log("fillAmounr", fillAmount)
-
+        
             const resolverContract = new Resolver(src.resolver, dst.resolver)
 
             // Step 2: Deploy source escrow on EVM side using 1inch SDK
             console.log(`[${srcChainId}] Deploying source escrow for order ${orderHash}`)
-            console.log(resolverContract)
             const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(
                 resolverContract.deploySrc(
                     srcChainId,
