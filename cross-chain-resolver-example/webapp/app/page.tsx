@@ -263,65 +263,61 @@ export default function TokenSwap() {
       setSwapData(swapResponse)
       console.log('Swap initiated:', swapResponse)
       
+      // Automatically execute the rest of the swap
+      await executeAutomatedSwap(swapResponse)
+      
     } catch (error) {
-      console.error('Swap initiation failed:', error)
+      console.error('Swap failed:', error)
       alert(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsSwapping(false)
     }
   }
 
-  // Handle source escrow deployment with real CrossChainOrder
-  const handleDeploySource = async () => {
-    if (!swapData || !metamaskWallet.isConnected) return
-
-    setIsDeployingSource(true)
+  // Automated swap execution after initial approval
+  const executeAutomatedSwap = async (swapResponse: SwapResponse) => {
     try {
-      console.log('Deploying source escrow with real CrossChainOrder...')
-      console.log('Order:', swapData.order)
-      console.log('Signature:', swapData.signature)
+      // Small delay for UX
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Step 1: Deploy source escrow (resolver handles this)
+      setIsDeployingSource(true)
+      console.log('🔄 Auto-executing: Deploying source escrow...')
       
-      // Use the real CrossChainOrder and signature from swapData
-      const txHash = await deploySourceEscrow(
-        swapData.order, // Real CrossChainOrder object
-        swapData.signature, // Real signature
-        swapData.fillAmount // Amount from swap response
+      const sourceEscrowTxHash = await deploySourceEscrow(
+        swapResponse.order,
+        swapResponse.signature,
+        swapResponse.fillAmount
       )
       
-      setSourceEscrowTx(txHash)
-      console.log('Real source escrow deployed:', txHash)
-      
-    } catch (error) {
-      console.error('Source escrow deployment failed:', error)
-      alert(`Source deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    } finally {
+      setSourceEscrowTx(sourceEscrowTxHash)
+      console.log('✅ Source escrow deployed:', sourceEscrowTxHash)
       setIsDeployingSource(false)
-    }
-  }
 
-  // Handle claim on Injective
-  const handleClaim = async () => {
-    if (!swapData || !keplrWallet.isConnected) return
+      // Small delay between steps for better UX
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
-    setIsClaiming(true)
-    try {
-      // This would need to be updated to work with Keplr properly
-      // For now, it's a placeholder showing the structure
-
-      const txHash = await claimInjectiveFunds(
-        swapData.swapId,
-        swapData.secretBytes,
+      // Step 2: Release funds on Injective (resolver handles this too)
+      setIsClaiming(true)
+      console.log('🔄 Auto-executing: Releasing funds on Injective...')
+      
+      const claimTxHash = await claimInjectiveFunds(
+        swapResponse.swapId,
+        swapResponse.secretBytes,
         keplrWallet.fullAddress,
-        'inj1rxrklxvejj93j7zqfpsd8a3c8n2xf4nakuwc6w' // Hardcoded contract for now
+        'inj1rxrklxvejj93j7zqfpsd8a3c8n2xf4nakuwc6w'
       )
       
-      setClaimTx(txHash)
-      console.log('Funds claimed on Injective:', txHash)
+      setClaimTx(claimTxHash)
+      console.log('✅ Funds released on Injective:', claimTxHash)
+      setIsClaiming(false)
+
+      console.log('🎉 Cross-chain swap completed successfully!')
       
     } catch (error) {
-      console.error('Claiming failed:', error)
-      alert(`Claiming failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    } finally {
+      console.error('Automated swap failed:', error)
+      alert(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setIsDeployingSource(false)
       setIsClaiming(false)
     }
   }
@@ -389,8 +385,9 @@ export default function TokenSwap() {
         </div>
       </header>
 
-      {/* Main Swap Interface */}
-      <div className="relative z-10 flex justify-center items-center min-h-[calc(100vh-140px)] px-4">
+      {/* Main Interface with Sidebar */}
+      <div className="relative z-10 flex justify-center items-start min-h-[calc(100vh-140px)] px-4 gap-8">
+        {/* Swap Interface */}
         <Card className="w-full max-w-lg p-8 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl">
           <div className="space-y-6">
             <div className="text-center">
@@ -583,69 +580,6 @@ export default function TokenSwap() {
                   <AlertDescription>{swapStatus.message}</AlertDescription>
                 </Alert>
 
-                {/* Step-by-step process */}
-                <div className="space-y-3">
-                  <div className="text-sm font-semibold text-gray-300">Swap Progress</div>
-                  
-                  {/* Step 1: Initiation */}
-                  <div className="flex items-center space-x-3 text-sm">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300">Destination escrow funded on Injective</span>
-                  </div>
-
-                  {/* Step 2: Source Deployment */}
-                  <div className="flex items-center space-x-3 text-sm">
-                    {sourceEscrowTx ? (
-                      <CheckCircle className="w-4 h-4 text-green-400" />
-                    ) : (
-                      <Clock className="w-4 h-4 text-yellow-400" />
-                    )}
-                    <span className={sourceEscrowTx ? "text-gray-300" : "text-yellow-400"}>
-                      Approve USDC & resolver deploys escrow (resolver pays gas)
-                    </span>
-                    {!sourceEscrowTx && (
-                      <Button
-                        onClick={handleDeploySource}
-                        disabled={isDeployingSource}
-                        size="sm"
-                        className="ml-auto bg-blue-600 hover:bg-blue-700"
-                      >
-                        {isDeployingSource ? "Approving & Processing..." : "Approve & Deploy (No Gas)"}
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Step 3: Claim */}
-                  <div className="flex items-center space-x-3 text-sm">
-                    {claimTx ? (
-                      <CheckCircle className="w-4 h-4 text-green-400" />
-                    ) : (
-                      <Clock className="w-4 h-4 text-yellow-400" />
-                    )}
-                    <span className={claimTx ? "text-gray-300" : "text-yellow-400"}>
-                      Release funds to your Keplr address
-                    </span>
-                    {sourceEscrowTx && !claimTx && (
-                      <Button
-                        onClick={handleClaim}
-                        disabled={isClaiming}
-                        size="sm"
-                        className="ml-auto bg-purple-600 hover:bg-purple-700"
-                      >
-                        {isClaiming ? "Releasing..." : "Release Funds"}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Reset button */}
-                <Button
-                  onClick={resetSwap}
-                  variant="outline"
-                  className="w-full border-white/20 text-white hover:bg-white/10"
-                >
-                  Start New Swap
-                </Button>
               </div>
             )}
 
@@ -690,6 +624,139 @@ export default function TokenSwap() {
             </div>
           </div>
         </Card>
+
+        {/* Progress Sidebar */}
+        {swapData && (
+          <Card className="w-full max-w-md p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl h-fit sticky top-4">
+            <div className="space-y-6">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-white mb-2">Swap Progress</h3>
+                <div className="text-sm text-gray-400">Real-time transaction tracking</div>
+              </div>
+
+              {/* Progress Steps */}
+              <div className="space-y-4">
+                {/* Step 1: Destination Funding */}
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mt-1">
+                    <CheckCircle className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-white">Injective Escrow Funded</div>
+                    <div className="text-xs text-gray-400 mt-1">Resolver deposited {swapData.injAmount} INJ</div>
+                    {swapData.destinationTxHash && (
+                      <a
+                        href={`https://testnet.explorer.injective.network/transaction/${swapData.destinationTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 underline mt-1 block break-all"
+                      >
+                        {swapData.destinationTxHash.slice(0, 20)}...
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 2: Source Deployment */}
+                <div className="flex items-start space-x-3">
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${
+                    sourceEscrowTx 
+                      ? 'bg-green-500' 
+                      : isDeployingSource 
+                        ? 'bg-blue-500' 
+                        : 'bg-gray-600'
+                  }`}>
+                    {sourceEscrowTx ? (
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    ) : isDeployingSource ? (
+                      <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-white">
+                      {sourceEscrowTx ? 'USDC Locked in Escrow' : isDeployingSource ? 'Locking USDC...' : 'Pending USDC Lock'}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {sourceEscrowTx ? `${swapData.fillAmount} USDC secured` : 'Resolver deploying source escrow'}
+                    </div>
+                    {sourceEscrowTx && (
+                      <a
+                        href={`https://explorer.buildbear.io/appalling-thepunisher-3e7a9d1c/tx/${sourceEscrowTx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 underline mt-1 block break-all"
+                      >
+                        {sourceEscrowTx.slice(0, 20)}...
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 3: Funds Release */}
+                <div className="flex items-start space-x-3">
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${
+                    claimTx 
+                      ? 'bg-green-500' 
+                      : isClaiming 
+                        ? 'bg-purple-500' 
+                        : 'bg-gray-600'
+                  }`}>
+                    {claimTx ? (
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    ) : isClaiming ? (
+                      <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-white">
+                      {claimTx ? 'INJ Released to Wallet' : isClaiming ? 'Releasing INJ...' : 'Pending INJ Release'}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {claimTx ? `${swapData.injAmount} INJ sent to ${keplrWallet.address}` : 'Resolver releasing funds to recipient'}
+                    </div>
+                    {claimTx && (
+                      <a
+                        href={`https://testnet.explorer.injective.network/transaction/${claimTx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 underline mt-1 block break-all"
+                      >
+                        {claimTx.slice(0, 20)}...
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Swap Summary */}
+              {claimTx && (
+                <div className="border-t border-white/10 pt-4">
+                  <div className="text-center">
+                    <div className="text-2xl mb-2">🎉</div>
+                    <div className="text-lg font-bold text-green-400">Swap Complete!</div>
+                    <div className="text-sm text-gray-400 mt-1">
+                      Successfully swapped {swapData.fillAmount} USDC for {swapData.injAmount} INJ
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Reset Button */}
+              {claimTx && (
+                <Button
+                  onClick={resetSwap}
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-xl"
+                >
+                  Start New Swap
+                </Button>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Footer */}

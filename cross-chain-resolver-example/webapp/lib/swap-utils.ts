@@ -23,6 +23,7 @@ export interface SwapResponse {
   injAmount: string
   exchangeRate: number
   message: string
+  destinationTxHash?: string
   error?: string
   details?: any
 }
