@@ -36,8 +36,8 @@ export const SWAP_CONFIG = {
   source: {
     chainId: 27270, // BuildBear testnet
     rpcUrl: "https://rpc.buildbear.io/appalling-thepunisher-3e7a9d1c",
-    escrowFactory: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    resolver: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    escrowFactory: "0x3A686A56071445Bc36d432C9332eBDcae3F6dC4D", // From test deployment
+    resolver: "0xB9c80Fd36A0ea0AD844538934ac7384aC0f46659", // From test deployment
     limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
     wrappedNative: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
     tokens: {
@@ -300,7 +300,41 @@ export async function deploySourceEscrow(
         userAddress,
         extensionData: order.extension.encode(),
         safetyDeposit: order.escrowExtension.srcSafetyDeposit.toString(),
-        takingAmount: order.takingAmount.toString()
+        takingAmount: order.takingAmount.toString(),
+        // ✅ Generate real SDK immutables (matching main.spec.ts)
+        immutables: (() => {
+          try {
+            const immutables = order.toSrcImmutables(
+              SWAP_CONFIG.source.chainId, // Use actual chainId from config
+              new Sdk.Address(SWAP_CONFIG.source.resolver),
+              fillAmountBigInt,
+              order.escrowExtension.hashLockInfo // Add the missing hashLock parameter!
+            )
+            console.log('✅ Generated immutables:', immutables.build())
+            return immutables.build()
+          } catch (error) {
+            console.error('❌ Error generating immutables:', error)
+            throw new Error('Failed to generate immutables: ' + (error instanceof Error ? error.message : String(error)))
+          }
+        })(),
+        // ✅ Generate real taker traits (matching main.spec.ts)
+        takerTraits: (() => {
+          try {
+            const takerTraits = Sdk.TakerTraits.default()
+              .setExtension(order.extension)
+              .setAmountMode(Sdk.AmountMode.maker)
+              .setAmountThreshold(order.takingAmount)
+            const {args, trait} = takerTraits.encode()
+            console.log('✅ Generated taker traits:', { value: trait.toString(), args })
+            return {
+              value: trait.toString(),
+              args: args
+            }
+          } catch (error) {
+            console.error('❌ Error generating taker traits:', error)
+            throw new Error('Failed to generate taker traits: ' + (error instanceof Error ? error.message : String(error)))
+          }
+        })()
       })
     })
 

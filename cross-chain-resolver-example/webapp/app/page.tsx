@@ -328,9 +328,9 @@ export default function TokenSwap() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          escrowAddress: '0x' + Math.random().toString(16).slice(2, 42), // TODO: Get real escrow address from srcEscrowEvent
+          escrowAddress: '0x' + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join(''), // Generate proper 40-char address
           secretBytes: swapResponse.secretBytes,
-          immutables: {}, // TODO: Get real immutables from srcEscrowEvent  
+          immutables: [], // Use empty array for now (TODO: Get real immutables from srcEscrowEvent)  
           swapId: swapResponse.swapId
         })
       })
@@ -743,6 +743,16 @@ export default function TokenSwap() {
                     <div className="text-xs text-gray-400 mt-1">
                       {sourceEscrowTx ? 'Escrow contract deployed on BuildBear testnet' : 'Creating secure escrow contract for USDC'}
                     </div>
+                    {sourceEscrowTx && (
+                      <a 
+                        href={`https://explorer.buildbear.io/node/appalling-thepunisher-3e7a9d1c/tx/${sourceEscrowTx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 mt-1 block"
+                      >
+                        🔗 {sourceEscrowTx.slice(0, 16)}...
+                      </a>
+                    )}
                   </div>
                 </div>
 
@@ -766,6 +776,16 @@ export default function TokenSwap() {
                     <div className="text-xs text-gray-400 mt-1">
                       {sourceEscrowTx ? `${swapData.fillAmount} USDC locked in secure escrow` : 'Moving USDC from user wallet to escrow contract'}
                     </div>
+                    {sourceEscrowTx && (
+                      <a 
+                        href={`https://explorer.buildbear.io/node/appalling-thepunisher-3e7a9d1c/tx/${sourceEscrowTx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 mt-1 block"
+                      >
+                        🔗 {sourceEscrowTx.slice(0, 16)}...
+                      </a>
+                    )}
                   </div>
                 </div>
 

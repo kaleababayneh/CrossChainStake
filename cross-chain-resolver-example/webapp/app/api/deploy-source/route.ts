@@ -9,8 +9,8 @@ const config = {
   source: {
     chainId: 27270,
     rpcUrl: "https://rpc.buildbear.io/appalling-thepunisher-3e7a9d1c",
-    escrowFactory: process.env.ESCROW_FACTORY_ADDRESS || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    resolver: process.env.RESOLVER_CONTRACT_ADDRESS || "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    escrowFactory: process.env.ESCROW_FACTORY_ADDRESS || "0x3A686A56071445Bc36d432C9332eBDcae3F6dC4D", // From test deployment  
+    resolver: process.env.RESOLVER_CONTRACT_ADDRESS || "0xB9c80Fd36A0ea0AD844538934ac7384aC0f46659", // From test deployment
     limitOrderProtocol: '0x111111125421ca6dc452d289314280a0f8842a65',
     tokens: {
       USDC: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
       userAddress,
       safetyDeposit,
       extensionData,
-      takingAmount
+      takingAmount,
+      immutables,
+      takerTraits
     } = body
 
     if (!orderData || !signature || !fillAmount || !userAddress) {
@@ -37,6 +39,18 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Add validation for the new parameters
+    if (!immutables || !takerTraits) {
+      return NextResponse.json(
+        { error: 'Missing immutables or takerTraits from frontend' },
+        { status: 400 }
+      )
+    }
+
+    console.log('📊 Received SDK data:')
+    console.log('Immutables:', immutables)
+    console.log('TakerTraits:', takerTraits)
 
     console.log('🚀 REAL Resolver executing deploySrc for user:', userAddress)
     console.log('Fill amount:', fillAmount, 'USDC')
@@ -133,6 +147,29 @@ export async function POST(request: NextRequest) {
     const resolverContractJson = require('../../../lib/resolver-contract.json')
     const resolverInterface = new ethers.Interface(resolverContractJson.abi)
 
+    // ✅ DEBUG: Check if we're the owner of the Resolver contract
+    try {
+      const resolverContract = new ethers.Contract(config.source.resolver, resolverInterface, provider)
+      const contractOwner = await resolverContract.owner()
+      console.log('🔐 Contract owner:', contractOwner)
+      console.log('🔐 Our address:', resolverAddress)
+      console.log('🔐 Are we the owner?', contractOwner.toLowerCase() === resolverAddress.toLowerCase())
+      
+      if (contractOwner.toLowerCase() !== resolverAddress.toLowerCase()) {
+        return NextResponse.json(
+          { 
+            error: `Access denied: We are not the owner of the Resolver contract`,
+            contractOwner,
+            ourAddress: resolverAddress,
+            note: 'Only the contract owner can call deploySrc'
+          },
+          { status: 403 }
+        )
+      }
+    } catch (ownerCheckError) {
+      console.log('⚠️ Could not verify contract owner:', ownerCheckError)
+    }
+
     // Parse signature components
     const sigObj = ethers.Signature.from(signature)
     const r = sigObj.r
@@ -160,37 +197,17 @@ export async function POST(request: NextRequest) {
     // Extract takingAmount that was missing
     const takingAmountBigInt = takingAmount ? BigInt(takingAmount) : fillAmountBigInt
 
-    // Create proper immutables tuple according to ABI 
-    // struct Immutables: orderHash, hashlock, maker, taker, token, amount, safetyDeposit, timelocks
-    const immutablesTuple = [
-      ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['uint256', 'address'], [orderData.salt, orderData.maker])), // orderHash (placeholder)
-      extensionData && extensionData.length > 2 ? ethers.keccak256(extensionData) : ethers.ZeroHash, // hashlock (bytes32 - proper length)
-      orderData.maker,                      // maker (uint256 - Address)
-      config.source.resolver,               // taker (uint256 - Address, resolver address)
-      orderData.makerAsset,                 // token (uint256 - Address)
-      fillAmountBigInt,                     // amount (uint256)
-      safetyDeposit ? BigInt(safetyDeposit) : 0n, // safetyDeposit (uint256)
-      0n                                    // timelocks (uint256, simplified)
-    ]
-
-    // Create taker traits (simplified but functional)
-    const takerTraitsValue = (1n << 255n) // MAKER_AMOUNT_FLAG
-
-    console.log('Calling Resolver contract at:', config.source.resolver)
-    console.log('Immutables tuple:', immutablesTuple)
-    console.log('Taker traits:', takerTraitsValue.toString())
-
-    // 🎯 REAL TRANSACTION: Call Resolver.deploySrc (same as test)
+    // 🎯 REAL TRANSACTION: Call Resolver.deploySrc (exactly like main.spec.ts)
     const deploySrcTxRequest = {
-      to: config.source.resolver,  // Call Resolver contract (not LimitOrderProtocol!)
+      to: config.source.resolver,
       data: resolverInterface.encodeFunctionData('deploySrc', [
-        immutablesTuple,      // immutables tuple (properly formatted)
-        orderArray,           // order tuple
-        r,                    // signature r (bytes32)
-        vs,                   // signature vs (bytes32)
-        fillAmountBigInt,     // amount (uint256)
-        takerTraitsValue,     // takerTraits (uint256)
-        '0x'                 // args (bytes, empty for basic case)
+        immutables,                           // Real SDK immutables from frontend
+        orderArray,                           // order.build()
+        r,                                   // signature r
+        vs,                                  // signature vs  
+        fillAmountBigInt,                    // amount
+        BigInt(takerTraits?.value || '0'),   // trait: TakerTraits as BigInt
+        takerTraits?.args || '0x'            // args: bytes
       ]),
       value: safetyDeposit ? BigInt(safetyDeposit) : 0n
     }
@@ -211,16 +228,53 @@ export async function POST(request: NextRequest) {
     console.log('✅ REAL deploySrc transaction sent:', tx.hash)
     
     // Wait for confirmation
-    try {
-      const receipt = await tx.wait();
-      console.log('✅ REAL deploySrc transaction confirmed!');
-      console.log('Block number:', receipt?.blockNumber);
-    } catch (err) {
-      console.error("Transaction failed with error:", err);
-      if (err instanceof Error && typeof err === 'object' && 'receipt' in err && err.receipt && typeof err.receipt === 'object' && 'logs' in err.receipt) {
-        console.error("Transaction logs:", err.receipt.logs);
+  // Wait for confirmation
+try {
+  const receipt = await tx.wait();
+  console.log('✅ REAL deploySrc transaction confirmed!');
+  console.log('Block number:', receipt?.blockNumber);
+  console.log('Gas used:', receipt?.gasUsed?.toString());
+  console.log('Status:', receipt?.status); // 1 = success, 0 = failed
+  
+  // Parse and log all events
+  console.log('📋 Transaction Logs:');
+  console.log('Total logs:', receipt?.logs?.length || 0);
+  
+  if (receipt?.logs && receipt.logs.length > 0) {
+    receipt.logs.forEach((log, index) => {
+      console.log(`Log ${index}:`, {
+        address: log.address,
+        topics: log.topics,
+        data: log.data
+      });
+      
+      // Try to decode USDC Transfer events
+      if (log.address.toLowerCase() === config.source.tokens.USDC.toLowerCase()) {
+        try {
+          const transferInterface = new ethers.Interface([
+            'event Transfer(address indexed from, address indexed to, uint256 value)'
+          ]);
+          const decoded = transferInterface.parseLog({
+            topics: log.topics,
+            data: log.data
+          });
+          console.log(`🔄 USDC Transfer Event:`, {
+            from: decoded?.args.from,
+            to: decoded?.args.to,
+            value: ethers.formatUnits(decoded?.args.value, 6) + ' USDC'
+          });
+        } catch (decodeError) {
+          console.log('Could not decode as Transfer event:', decodeError);
+        }
       }
-    }
+    });
+  } else {
+    console.log('⚠️  NO EVENTS EMITTED - This might indicate the transaction did not perform expected operations');
+  }
+  
+} catch (err) {
+  console.error("Transaction failed with error:", err);
+}
     // console.log('✅ REAL deploySrc transaction confirmed!')
     // console.log('Block number:', receipt?.blockNumber)
     // console.log('Gas used:', receipt?.gasUsed?.toString())
