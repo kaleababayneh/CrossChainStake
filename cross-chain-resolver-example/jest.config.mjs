@@ -15,10 +15,14 @@ export default {
     },
     extensionsToTreatAsEsm: ['.ts', '.tsx'],
     transformIgnorePatterns: [
-        // "/node_modules/",
-        // "\\.pnp\\.[^\\/]+$",
+        'node_modules/(?!(@1inch|@cosmjs|libsodium-wrappers)/)'
     ],
-    moduleNameMapping: {
-        // '^browser-headers$': '<rootDir>/__mocks__/browser-headers.js'
-    }
+    moduleNameMapper: {
+        '^@1inch/cross-chain-sdk$': '<rootDir>/__mocks__/@1inch-cross-chain-sdk.js',
+        '^libsodium-wrappers-sumo$': '<rootDir>/__mocks__/libsodium-wrappers-sumo.js',
+        '^libsodium-wrappers$': '<rootDir>/__mocks__/libsodium-wrappers-sumo.js'
+    },
+    setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+    testTimeout: 30000,
+    forceExit: true
 }

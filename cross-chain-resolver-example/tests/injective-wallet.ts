@@ -1,144 +1,226 @@
 import {
-    PrivateKey,
-    MsgExecuteContractCompat,
-    MsgBroadcasterWithPk,
-    ChainGrpcWasmApi,
-    ChainGrpcBankApi
-  } from '@injectivelabs/sdk-ts'
-  import { Network, getNetworkEndpoints } from '@injectivelabs/networks'
-  import { ChainId } from '@injectivelabs/ts-types'
+  DirectSecp256k1HdWallet,
+  OfflineDirectSigner,
+} from '@cosmjs/proto-signing'
+import {
+  SigningStargateClient,
+  StargateClient,
+  DeliverTxResponse,
+} from '@cosmjs/stargate'
+import {
+  SigningCosmWasmClient,
+  CosmWasmClient,
+} from '@cosmjs/cosmwasm-stargate'
+import { Coin } from '@cosmjs/amino'
 
+export class InjectiveWallet {
+  public wallet: DirectSecp256k1HdWallet | null = null
+  public address: string = ''
+  private stargateClient?: SigningStargateClient
+  private cosmwasmClient?: SigningCosmWasmClient
+  private queryClient?: CosmWasmClient
+  private mnemonic: string
+  private isInitialized = false
   
-  export class InjectiveWallet {
-    public readonly wallet: PrivateKey
-    public readonly address: string
-    public readonly broadcaster: MsgBroadcasterWithPk
-    public readonly wasmApi: ChainGrpcWasmApi
-    public readonly bankApi: ChainGrpcBankApi
-  
-    constructor(mnemonic: string) {
-      this.wallet = PrivateKey.fromMnemonic(mnemonic)
-      this.address = this.wallet.toAddress().toBech32()
-  
-      const endpoints = getNetworkEndpoints(Network.Testnet)
-  
-      this.broadcaster = new MsgBroadcasterWithPk({
-        privateKey: this.wallet,
-        network: Network.Testnet,
-        chainId: ChainId.Testnet,
-        endpoints
-      })
-  
-      this.wasmApi = new ChainGrpcWasmApi(endpoints.grpc)
-      this.bankApi = new ChainGrpcBankApi(endpoints.grpc)
-    }
-  
-    public getAddress(): string {
-      return this.address
-    }
-  
-    public async getNativeBalance(denom: string): Promise<string> {
-      const balanced = await this.bankApi.fetchBalance({
-        accountAddress: this.address,
-        denom
-      })
-  
-      return balanced.amount.toString() 
-    }
-  
-    public async getTokenBalance(cw20Address: string): Promise<string> {
-      const query = {
-        balance: {
-          address: this.address
-        }
-      }
-  
-      const res = await this.wasmApi.fetchSmartContractState(cw20Address, Buffer.from(JSON.stringify(query)).toString('base64'))
-      return JSON.parse(Buffer.from(res.data).toString()).balance
-    }
-  
-    public async getAllowance(cw20Address: string, spender: string): Promise<string> {
-      const query = {
-        allowance: {
-          owner: this.address,
-          spender
-        }
-      }
-  
-      const res = await this.wasmApi.fetchSmartContractState(cw20Address, Buffer.from(JSON.stringify(query)).toString('base64'))
-      return JSON.parse(Buffer.from(res.data).toString()).allowance
-    }
-  
-    public async approveToken(cw20Address: string, spender: string, amount: string): Promise<string> {
-      const msg = {
-        increase_allowance: {
-          spender,
-          amount
-        }
-      }
-  
-      const tx = await this.broadcaster.broadcast({
-        msgs: MsgExecuteContractCompat.fromJSON({
-          sender: this.address,
-          contractAddress: cw20Address,
-          msg,
-          funds: []
-        })
-      })
-  
-      return tx.txHash
-    }
-  
-    public async transferToken(cw20Address: string, to: string, amount: string): Promise<string> {
-      const msg = {
-        transfer: {
-          recipient: to,
-          amount
-        }
-      }
-  
-      const tx = await this.broadcaster.broadcast({
-        msgs: MsgExecuteContractCompat.fromJSON({
-          sender: this.address,
-          contractAddress: cw20Address,
-          msg,
-          funds: []
-        })
-      })
-  
-      return tx.txHash
-    }
-  
-    public async sendNative(to: string, amount: string, denom = 'inj'): Promise<string> {
-      const msg = MsgExecuteContractCompat.fromJSON({
-        sender: this.address,
-        contractAddress: to,
-        msg: {},
-        funds: [{
-          denom,
-          amount
-        }]
-      })
-  
-      const tx = await this.broadcaster.broadcast({ msgs: msg })
-      return tx.txHash
-    }
-  
-    public async sendExecuteMsg(
-      contractAddress: string,
-      msg: object,
-      funds: { denom: string; amount: string }[] = []
-    ): Promise<string> {
-      const tx = await this.broadcaster.broadcast({
-        msgs: MsgExecuteContractCompat.fromJSON({
-          sender: this.address,
-          contractAddress,
-          msg,
-          funds
-        })
-      })
-  
-      return tx.txHash
-    }
+  // Injective testnet endpoints
+  private readonly rpcEndpoint = 'https://testnet.sentry.tm.injective.network:443'
+  private readonly prefix = 'inj'
+
+  constructor(mnemonic: string) {
+    this.mnemonic = mnemonic
   }
+
+  // Initialize the wallet (must be called after construction)
+  public async init(): Promise<void> {
+    if (this.isInitialized) return
+    
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(
+      this.mnemonic,
+      { prefix: this.prefix }
+    )
+    
+    const accounts = await wallet.getAccounts()
+    this.wallet = wallet
+    this.address = accounts[0].address
+
+    // Initialize clients
+    this.stargateClient = await SigningStargateClient.connectWithSigner(
+      this.rpcEndpoint,
+      wallet
+    )
+    
+    this.cosmwasmClient = await SigningCosmWasmClient.connectWithSigner(
+      this.rpcEndpoint,
+      wallet
+    )
+
+    this.queryClient = await CosmWasmClient.connect(this.rpcEndpoint)
+    this.isInitialized = true
+  }
+
+  // Static factory method for easier initialization
+  public static async create(mnemonic: string): Promise<InjectiveWallet> {
+    const wallet = new InjectiveWallet(mnemonic)
+    await wallet.init()
+    return wallet
+  }
+
+  public getAddress(): string {
+    return this.address
+  }
+
+  public async getNativeBalance(denom: string): Promise<string> {
+    if (!this.stargateClient) {
+      throw new Error('Wallet not initialized. Call init() first.')
+    }
+
+    const balance = await this.stargateClient.getBalance(this.address, denom)
+    return balance.amount
+  }
+
+  public async getTokenBalance(cw20Address: string): Promise<string> {
+    if (!this.queryClient) {
+      throw new Error('Wallet not initialized. Call init() first.')
+    }
+
+    const query = {
+      balance: {
+        address: this.address
+      }
+    }
+
+    const result = await this.queryClient.queryContractSmart(cw20Address, query)
+    return result.balance
+  }
+
+  public async getAllowance(cw20Address: string, spender: string): Promise<string> {
+    if (!this.queryClient) {
+      throw new Error('Wallet not initialized. Call init() first.')
+    }
+
+    const query = {
+      allowance: {
+        owner: this.address,
+        spender
+      }
+    }
+
+    const result = await this.queryClient.queryContractSmart(cw20Address, query)
+    return result.allowance
+  }
+
+  public async approveToken(cw20Address: string, spender: string, amount: string): Promise<string> {
+    if (!this.cosmwasmClient) {
+      throw new Error('Wallet not initialized. Call init() first.')
+    }
+
+    const msg = {
+      increase_allowance: {
+        spender,
+        amount
+      }
+    }
+
+    const fee = {
+      amount: [{ denom: 'inj', amount: '500000000000000' }],
+      gas: '2000000',
+    }
+
+    const result = await this.cosmwasmClient.execute(
+      this.address,
+      cw20Address,
+      msg,
+      fee,
+      undefined,
+      []
+    )
+
+    return result.transactionHash
+  }
+
+  public async transferToken(cw20Address: string, to: string, amount: string): Promise<string> {
+    if (!this.cosmwasmClient) {
+      throw new Error('Wallet not initialized. Call init() first.')
+    }
+
+    const msg = {
+      transfer: {
+        recipient: to,
+        amount
+      }
+    }
+
+    const fee = {
+      amount: [{ denom: 'inj', amount: '500000000000000' }],
+      gas: '2000000',
+    }
+
+    const result = await this.cosmwasmClient.execute(
+      this.address,
+      cw20Address,
+      msg,
+      fee,
+      undefined,
+      []
+    )
+
+    return result.transactionHash
+  }
+
+  public async sendNative(to: string, amount: string, denom = 'inj'): Promise<string> {
+    if (!this.stargateClient) {
+      throw new Error('Wallet not initialized. Call init() first.')
+    }
+
+    const sendAmount: Coin = {
+      denom,
+      amount
+    }
+
+    const fee = {
+      amount: [{ denom: 'inj', amount: '500000000000000' }],
+      gas: '2000000',
+    }
+
+    const result = await this.stargateClient.sendTokens(
+      this.address,
+      to,
+      [sendAmount],
+      fee
+    )
+
+    return result.transactionHash
+  }
+
+  public async sendExecuteMsg(
+    contractAddress: string,
+    msg: object,
+    funds: { denom: string; amount: string }[] = []
+  ): Promise<string> {
+    if (!this.cosmwasmClient) {
+      throw new Error('Wallet not initialized. Call init() first.')
+    }
+
+    const fee = {
+      amount: [{ denom: 'inj', amount: '500000000000000' }],
+      gas: '2000000',
+    }
+
+    const fundsCoins: Coin[] = funds.map(f => ({
+      denom: f.denom,
+      amount: f.amount
+    }))
+
+    const result = await this.cosmwasmClient.execute(
+      this.address,
+      contractAddress,
+      msg,
+      fee,
+      undefined,
+      fundsCoins
+    )
+
+    return result.transactionHash
+  }
+}
   
