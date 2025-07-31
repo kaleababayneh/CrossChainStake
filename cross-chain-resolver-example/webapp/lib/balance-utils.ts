@@ -1,8 +1,8 @@
 import { ethers } from 'ethers'
-import { COSMOS_CHAINS, CosmosChain, ETHEREUM_NETWORKS } from './chain-configs'
+import { COSMOS_CHAINS, CosmosChain, CHAIN_CONFIGS } from './chain-configs'
 
-// USDC contract address on Ethereum mainnet
-const USDC_CONTRACT_ADDRESS = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+// USDC contract address on BuildBear testnet
+const USDC_CONTRACT_ADDRESS = CHAIN_CONFIGS.ethereum.tokens.USDC.address
 
 // ERC20 ABI for balanceOf function
 const ERC20_ABI = [
@@ -19,7 +19,8 @@ export async function fetchUSDCBalance(address: string): Promise<string> {
       throw new Error('MetaMask not installed')
     }
 
-    const provider = new ethers.BrowserProvider(window.ethereum)
+    // Use BuildBear testnet RPC for better reliability  
+    const provider = new ethers.JsonRpcProvider(CHAIN_CONFIGS.ethereum.rpcUrl)
     const usdcContract = new ethers.Contract(USDC_CONTRACT_ADDRESS, ERC20_ABI, provider)
     
     const balance = await usdcContract.balanceOf(address)
@@ -106,8 +107,8 @@ export async function getNetworkInfo(): Promise<{ chainId: string; isSupported: 
     const network = await provider.getNetwork()
     const chainId = network.chainId.toString()
     
-    // Support Ethereum mainnet (1) and common testnets
-    const supportedChainIds = ['1', '5', '11155111', '27270'] // mainnet, goerli, sepolia, custom testnet
+    // Support BuildBear testnet primarily
+    const supportedChainIds = [CHAIN_CONFIGS.ethereum.chainId.toString()]
     const isSupported = supportedChainIds.includes(chainId)
     
     return { chainId, isSupported }

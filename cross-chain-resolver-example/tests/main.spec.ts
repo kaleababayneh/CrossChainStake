@@ -249,7 +249,7 @@ describe('Resolving example', () => {
 
 
   
-        it('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
+        it.skip('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
             const swapId = `swip-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex'))

@@ -251,4 +251,4 @@ export async function claim_funds_with_params_resolver(swapId: string, preimage:
   console.log('Tx Hash:', tx.txHash)
 
   return tx.txHash
-}
+} 

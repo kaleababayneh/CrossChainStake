@@ -4,9 +4,19 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowDownUp, RefreshCw } from "lucide-react"
+import { ArrowDownUp, RefreshCw, CheckCircle, Clock, AlertCircle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { fetchUSDCBalance, fetchINJBalance, getTokenBalance, formatBalance } from "@/lib/balance-utils"
+import { detectNetwork, switchToBuildBearNetwork, CHAIN_CONFIGS } from "@/lib/chain-configs"
+import { 
+  initiateSwap, 
+  deploySourceEscrow, 
+  claimInjectiveFunds, 
+  getSwapStatus, 
+  SwapResponse, 
+  SwapStatus 
+} from "@/lib/swap-utils"
 
 // Types for wallet connections
 interface WalletState {
@@ -46,11 +56,36 @@ export default function TokenSwap() {
   const [fromAmount, setFromAmount] = useState("")
   const [toAmount, setToAmount] = useState("")
   const [isSwapping, setIsSwapping] = useState(false)
+  
+  // Cross-chain swap state
+  const [swapData, setSwapData] = useState<SwapResponse | null>(null)
+  const [swapStatus, setSwapStatus] = useState<SwapStatus>({ step: 'failed', message: 'Swap not initiated', txHashes: {} })
+  const [sourceEscrowTx, setSourceEscrowTx] = useState<string>("")
+  const [claimTx, setClaimTx] = useState<string>("")
+  const [isDeployingSource, setIsDeployingSource] = useState(false)
+  const [isClaiming, setIsClaiming] = useState(false)
 
   // Connect MetaMask
   const connectMetaMask = async () => {
     if (typeof window !== "undefined" && (window as any).ethereum) {
       try {
+        // First check if user is on the correct network
+        const networkInfo = await detectNetwork()
+        
+        if (!networkInfo.isCorrectNetwork) {
+          const switchNetwork = confirm(
+            `You are not connected to the BuildBear testnet (Chain ID: ${CHAIN_CONFIGS.ethereum.chainId}). ` +
+            "Would you like to switch networks?"
+          )
+          
+          if (switchNetwork) {
+            await switchToBuildBearNetwork()
+          } else {
+            alert("Please switch to BuildBear testnet to use this application.")
+            return
+          }
+        }
+
         const accounts = await (window as any).ethereum.request({
           method: "eth_requestAccounts",
         })
@@ -87,6 +122,7 @@ export default function TokenSwap() {
         }
       } catch (error) {
         console.error("Failed to connect MetaMask:", error)
+        alert("Failed to connect to MetaMask. Please make sure it's installed and try again.")
       }
     } else {
       alert("MetaMask is not installed!")
@@ -182,12 +218,23 @@ export default function TokenSwap() {
   // Handle amount changes
   const handleFromAmountChange = (value: string) => {
     setFromAmount(value)
-    // Mock exchange rate calculation
-    const rate = 0.85 // Mock rate
+    // Hardcoded exchange rate: 1000 USDC = 1 INJ
+    const rate = 1 / 1000 // 0.001 INJ per USDC
     setToAmount(value ? (Number.parseFloat(value) * rate).toFixed(6) : "")
   }
 
-  // Handle swap
+  // Update swap status when dependencies change
+  useEffect(() => {
+    const status = getSwapStatus(
+      !!swapData,
+      sourceEscrowTx,
+      swapData?.swapId, // Using swapId as destination funding indicator
+      claimTx
+    )
+    setSwapStatus(status)
+  }, [swapData, sourceEscrowTx, claimTx])
+
+  // Handle swap initiation
   const handleSwap = async () => {
     if (!metamaskWallet.isConnected || !keplrWallet.isConnected) {
       alert("Please connect both wallets to proceed with the swap")
@@ -201,13 +248,85 @@ export default function TokenSwap() {
 
     setIsSwapping(true)
 
-    // Mock swap process
-    setTimeout(() => {
-      alert(`Successfully swapped ${fromAmount} ${fromToken} to ${toAmount} ${toToken}!`)
-      setFromAmount("")
-      setToAmount("")
+    try {
+      const swapResponse = await initiateSwap({
+        fromAmount,
+        userAddress: metamaskWallet.fullAddress,
+        injectiveAddress: keplrWallet.fullAddress,
+        fromToken,
+        toToken
+      })
+
+      setSwapData(swapResponse)
+      console.log('Swap initiated:', swapResponse)
+      
+    } catch (error) {
+      console.error('Swap initiation failed:', error)
+      alert(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
       setIsSwapping(false)
-    }, 2000)
+    }
+  }
+
+  // Handle source escrow deployment
+  const handleDeploySource = async () => {
+    if (!swapData || !metamaskWallet.isConnected) return
+
+    setIsDeployingSource(true)
+    try {
+      // For now, we'll simulate the transaction since we don't have the full 1inch resolver contract
+      // In a real implementation, this would call the actual contract method
+      const txHash = await deploySourceEscrow(
+        swapData.orderHash,
+        swapData.order,
+        "", // signature would be generated
+        swapData.order.makingAmount
+      )
+      
+      setSourceEscrowTx(txHash)
+      console.log('Source escrow deployed:', txHash)
+      
+    } catch (error) {
+      console.error('Source escrow deployment failed:', error)
+      alert(`Source deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsDeployingSource(false)
+    }
+  }
+
+  // Handle claim on Injective
+  const handleClaim = async () => {
+    if (!swapData || !keplrWallet.isConnected) return
+
+    setIsClaiming(true)
+    try {
+      // This would need to be updated to work with Keplr properly
+      // For now, it's a placeholder showing the structure
+      const txHash = await claimInjectiveFunds(
+        swapData.swapId,
+        swapData.secretBytes,
+        keplrWallet.fullAddress,
+        swapData.injectiveContract
+      )
+      
+      setClaimTx(txHash)
+      console.log('Funds claimed on Injective:', txHash)
+      
+    } catch (error) {
+      console.error('Claiming failed:', error)
+      alert(`Claiming failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsClaiming(false)
+    }
+  }
+
+  // Reset swap state
+  const resetSwap = () => {
+    setSwapData(null)
+    setSourceEscrowTx("")
+    setClaimTx("")
+    setFromAmount("")
+    setToAmount("")
   }
 
   // Reverse swap direction
@@ -235,6 +354,7 @@ export default function TokenSwap() {
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl shadow-lg"></div>
           <h1 className="text-3xl font-bold text-white tracking-tight">CrossSwap</h1>
+          <div className="text-xs text-gray-400 mt-1">BuildBear Testnet ↔ Injective</div>
         </div>
 
         {/* Wallet Connection Buttons */}
@@ -449,23 +569,99 @@ export default function TokenSwap() {
               </div>
             )}
 
-            {/* Swap Button */}
-            <Button
-              onClick={handleSwap}
-              disabled={isSwapping || !fromAmount || !metamaskWallet.isConnected || !keplrWallet.isConnected}
-              className="w-full h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
-            >
-              {isSwapping ? (
-                <div className="flex items-center space-x-3">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Swapping...</span>
+            {/* Swap Status */}
+            {swapData && (
+              <div className="space-y-4">
+                <Alert className="bg-blue-500/10 border-blue-500/20 text-blue-400">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{swapStatus.message}</AlertDescription>
+                </Alert>
+
+                {/* Step-by-step process */}
+                <div className="space-y-3">
+                  <div className="text-sm font-semibold text-gray-300">Swap Progress</div>
+                  
+                  {/* Step 1: Initiation */}
+                  <div className="flex items-center space-x-3 text-sm">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300">Destination escrow funded on Injective</span>
+                  </div>
+
+                  {/* Step 2: Source Deployment */}
+                  <div className="flex items-center space-x-3 text-sm">
+                    {sourceEscrowTx ? (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-yellow-400" />
+                    )}
+                    <span className={sourceEscrowTx ? "text-gray-300" : "text-yellow-400"}>
+                      Deploy source escrow on Ethereum
+                    </span>
+                    {!sourceEscrowTx && (
+                      <Button
+                        onClick={handleDeploySource}
+                        disabled={isDeployingSource}
+                        size="sm"
+                        className="ml-auto bg-blue-600 hover:bg-blue-700"
+                      >
+                        {isDeployingSource ? "Deploying..." : "Deploy Now"}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Step 3: Claim */}
+                  <div className="flex items-center space-x-3 text-sm">
+                    {claimTx ? (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-yellow-400" />
+                    )}
+                    <span className={claimTx ? "text-gray-300" : "text-yellow-400"}>
+                      Release funds to your Keplr address
+                    </span>
+                    {sourceEscrowTx && !claimTx && (
+                      <Button
+                        onClick={handleClaim}
+                        disabled={isClaiming}
+                        size="sm"
+                        className="ml-auto bg-purple-600 hover:bg-purple-700"
+                      >
+                        {isClaiming ? "Releasing..." : "Release Funds"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              ) : !metamaskWallet.isConnected || !keplrWallet.isConnected ? (
-                "Connect Wallets to Swap"
-              ) : (
-                "Swap Tokens"
-              )}
-            </Button>
+
+                {/* Reset button */}
+                <Button
+                  onClick={resetSwap}
+                  variant="outline"
+                  className="w-full border-white/20 text-white hover:bg-white/10"
+                >
+                  Start New Swap
+                </Button>
+              </div>
+            )}
+
+            {/* Swap Button */}
+            {!swapData && (
+              <Button
+                onClick={handleSwap}
+                disabled={isSwapping || !fromAmount || !metamaskWallet.isConnected || !keplrWallet.isConnected}
+                className="w-full h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+              >
+                {isSwapping ? (
+                  <div className="flex items-center space-x-3">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Initiating Swap...</span>
+                  </div>
+                ) : !metamaskWallet.isConnected || !keplrWallet.isConnected ? (
+                  "Connect Wallets to Swap"
+                ) : (
+                  "Start Cross-Chain Swap"
+                )}
+              </Button>
+            )}
 
             {/* Connection Status */}
             <div className="flex justify-between text-xs text-gray-400 pt-2">
