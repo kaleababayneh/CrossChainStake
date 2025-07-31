@@ -268,23 +268,25 @@ export default function TokenSwap() {
     }
   }
 
-  // Handle source escrow deployment
+  // Handle source escrow deployment with real CrossChainOrder
   const handleDeploySource = async () => {
     if (!swapData || !metamaskWallet.isConnected) return
 
     setIsDeployingSource(true)
     try {
-      // For now, we'll simulate the transaction since we don't have the full 1inch resolver contract
-      // In a real implementation, this would call the actual contract method
+      console.log('Deploying source escrow with real CrossChainOrder...')
+      console.log('Order:', swapData.order)
+      console.log('Signature:', swapData.signature)
+      
+      // Use the real CrossChainOrder and signature from swapData
       const txHash = await deploySourceEscrow(
-        swapData.orderHash,
-        swapData.order,
-        "", // signature would be generated
-        swapData.order.makingAmount
+        swapData.order, // Real CrossChainOrder object
+        swapData.signature, // Real signature
+        swapData.fillAmount // Amount from swap response
       )
       
       setSourceEscrowTx(txHash)
-      console.log('Source escrow deployed:', txHash)
+      console.log('Real source escrow deployed:', txHash)
       
     } catch (error) {
       console.error('Source escrow deployment failed:', error)
@@ -306,7 +308,7 @@ export default function TokenSwap() {
         swapData.swapId,
         swapData.secretBytes,
         keplrWallet.fullAddress,
-        swapData.injectiveContract
+        'inj1rxrklxvejj93j7zqfpsd8a3c8n2xf4nakuwc6w' // Hardcoded contract for now
       )
       
       setClaimTx(txHash)

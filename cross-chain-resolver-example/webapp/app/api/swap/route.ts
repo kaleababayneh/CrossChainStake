@@ -9,7 +9,7 @@ import {
 import { Network } from '@injectivelabs/networks'
 import { ChainId } from '@injectivelabs/ts-types'
 
-// Simplified configuration 
+// Configuration matching the test setup
 const config = {
   source: {
     chainId: 27270,
@@ -22,12 +22,9 @@ const config = {
   },
   destination: {
     chainId: 'injective-888',
-    contractAddress: 'inj1contract_placeholder'
+    contractAddress: 'inj1rxrklxvejj93j7zqfpsd8a3c8n2xf4nakuwc6w'
   }
 }
-
-// Hardcoded exchange rate: 1000 USDC = 1 INJ
-const EXCHANGE_RATE = 1000
 
 // Resolver configuration for funding destination
 const resolverMnemonic = "soda giggle lobster frown sponsor bridge follow firm fashion buddy final this crawl junior burst race differ school pupil bleak above economy toy chunk"
@@ -38,42 +35,39 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { 
-      fromAmount, 
-      userAddress, 
-      injectiveAddress,
-      fromToken = 'USDC',
-      toToken = 'INJ'
+      swapId,
+      order, // Serialized CrossChainOrder
+      signature,
+      orderHash,
+      secretBytes,
+      fromAmount,
+      injAmount,
+      userAddress,
+      injectiveAddress
     } = body
 
-    if (!fromAmount || !userAddress || !injectiveAddress) {
+    if (!swapId || !order || !signature || !orderHash || !secretBytes || !fromAmount || !injAmount || !userAddress || !injectiveAddress) {
       return NextResponse.json(
-        { error: 'Missing required parameters' },
+        { error: 'Missing required CrossChainOrder parameters' },
         { status: 400 }
       )
     }
 
-    // Calculate INJ amount using hardcoded rate: 1000 USDC = 1 INJ
-    const injAmount = (parseFloat(fromAmount) / EXCHANGE_RATE).toFixed(6)
-
-    // Generate unique swap ID and secret for atomic swap
-    const swapId = `swap-${Date.now()}`
-    const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-    const secretBytesX = `0x${secretBytes}`
-    const secret = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
-
-    console.log('Starting simplified cross-chain swap:', { 
-      swapId, 
+    console.log('Processing real CrossChainOrder swap:', { 
+      swapId,
+      orderHash,
       fromAmount, 
       injAmount,
       userAddress, 
-      injectiveAddress 
+      injectiveAddress,
+      signature: signature.substring(0, 20) + '...'
     })
 
     // Step 1: Fund destination escrow on Injective (like in test Step 3)
     console.log('🔓 Funding destination escrow on Injective...')
     
     try {
-      const contractAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS
+      const contractAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS || config.destination.contractAddress
 
       if (!contractAddress) {
         throw new Error('Contract address not configured')
@@ -92,7 +86,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Create the fund message (following fund_dst_escrow_with_params pattern from tests)
-      const hash = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
+      const hash = createHash('sha256').update(Buffer.from(secretBytes.replace('0x', ''), 'hex')).digest('hex')
       const executeMsg = {
         create: {
           id: swapId,
@@ -104,7 +98,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      console.log('💰 Resolver funding destination escrow for swap:', swapId)
+      console.log('💰 Resolver funding destination escrow for CrossChainOrder:', orderHash)
       console.log('Amount:', injAmount, 'INJ')
       console.log('Recipient:', injectiveAddress)
       console.log('Execute message:', executeMsg)
@@ -125,6 +119,21 @@ export async function POST(request: NextRequest) {
       console.log('✅ Resolver successfully funded destination escrow!')
       console.log('Tx Hash:', tx.txHash)
       
+      // Return successful response with destination funding info
+      return NextResponse.json({
+        success: true,
+        swapId,
+        orderHash,
+        secretBytes,
+        order: order, // Return the serialized order back
+        signature,
+        destinationTxHash: tx.txHash,
+        injectiveContract: contractAddress,
+        injAmount,
+        fromAmount,
+        message: 'CrossChainOrder processed and destination escrow funded. Ready to deploy source escrow.'
+      })
+      
     } catch (error) {
       console.error('Failed to fund destination escrow:', error)
       return NextResponse.json(
@@ -133,27 +142,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Return simplified swap details
-    return NextResponse.json({
-      success: true,
-      swapId,
-      orderHash: `0x${secret}`, // Using secret as order hash for now
-      secretBytes,
-      order: {
-        makingAmount: ethers.parseUnits(fromAmount, 6).toString(), // USDC amount
-        takingAmount: ethers.parseUnits(injAmount, 18).toString(), // INJ amount  
-        maker: userAddress,
-        makerAsset: config.source.tokens.USDC,
-        takerAsset: 'inj' // INJ token
-      },
-      injectiveContract: process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS || 'inj1contract_placeholder',
-      injAmount,
-      exchangeRate: EXCHANGE_RATE,
-      message: 'Swap prepared. Ready to deploy source escrow and claim on Injective.'
-    })
-
   } catch (error) {
-    console.error('Swap API error:', error)
+    console.error('CrossChainOrder API error:', error)
     return NextResponse.json(
       { error: 'Internal server error', details: error?.toString() },
       { status: 500 }
