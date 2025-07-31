@@ -18,6 +18,9 @@ import {
   SwapStatus 
 } from "@/lib/swap-utils"
 
+import {uint8ArrayToHex, UINT_40_MAX} from '@1inch/byte-utils'
+
+
 // Types for wallet connections
 interface WalletState {
   isConnected: boolean
@@ -304,6 +307,7 @@ export default function TokenSwap() {
     try {
       // This would need to be updated to work with Keplr properly
       // For now, it's a placeholder showing the structure
+
       const txHash = await claimInjectiveFunds(
         swapData.swapId,
         swapData.secretBytes,
@@ -597,7 +601,7 @@ export default function TokenSwap() {
                       <Clock className="w-4 h-4 text-yellow-400" />
                     )}
                     <span className={sourceEscrowTx ? "text-gray-300" : "text-yellow-400"}>
-                      Deploy source escrow on Ethereum
+                      Approve USDC & resolver deploys escrow (resolver pays gas)
                     </span>
                     {!sourceEscrowTx && (
                       <Button
@@ -606,7 +610,7 @@ export default function TokenSwap() {
                         size="sm"
                         className="ml-auto bg-blue-600 hover:bg-blue-700"
                       >
-                        {isDeployingSource ? "Deploying..." : "Deploy Now"}
+                        {isDeployingSource ? "Approving & Processing..." : "Approve & Deploy (No Gas)"}
                       </Button>
                     )}
                   </div>

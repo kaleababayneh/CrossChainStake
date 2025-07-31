@@ -46,10 +46,13 @@ export async function POST(request: NextRequest) {
     })
 
     // Create the release message (resolver releases funds to recipient)
+    // Remove "0x" prefix from secretBytes as Injective contract expects raw hex
+    const preimage = secretBytes.startsWith('0x') ? secretBytes.slice(2) : secretBytes
+    
     const executeMsg = {
       release: {
         id: swapId,
-        preimage: secretBytes,
+        preimage: preimage, // Raw hex without "0x" prefix
         recipient: recipientAddress
       },
     }

@@ -231,8 +231,8 @@ export async function initiateSwap(params: SwapParams): Promise<SwapResponse> {
 }
 
 /**
- * Deploy source escrow using real resolver contract (like test Step 2)
- * Note: Since the order comes back from API as plain object, we need to handle it carefully
+ * Approve USDC for the resolver to execute deploySrc (like test setup)
+ * User only approves - resolver will execute the actual transaction
  */
 export async function deploySourceEscrow(
   orderData: any, // Plain object from API, not CrossChainOrder instance
@@ -244,53 +244,17 @@ export async function deploySourceEscrow(
   }
 
   try {
-    console.log('Deploying source escrow with real resolver contract...')
-    console.log('Order data:', orderData)
+    console.log('Setting up USDC approval for resolver to execute deploySrc...')
     console.log('Fill amount:', fillAmount)
 
     const provider = new ethers.BrowserProvider(window.ethereum)
     const signer = await provider.getSigner()
-    
-    // Create resolver transaction request (following test pattern)
-    const resolverAddress = SWAP_CONFIG.source.resolver
-    const fillAmountBigInt = ethers.parseUnits(fillAmount, 6)
-    
-    // Safety deposit from test (0.001 ETH)
-    const srcSafetyDeposit = ethers.parseEther('0.001')
-
-    console.log('Using simplified approach - direct contract call with serialized order')
-    
-    // Parse signature like in resolver.ts
-    const { r, yParityAndS: vs } = ethers.Signature.from(signature)
-
-    // Create the resolver contract interface based on the test implementation
-    const resolverABI = [
-      'function deploySrc(bytes calldata immutables, bytes calldata order, bytes32 r, bytes32 vs, uint256 amount, uint256 trait, bytes calldata args) external payable',
-      'function deployDst(bytes calldata immutables, uint256 privateCancellation) external payable',
-      'function withdraw(address escrow, string calldata secret, bytes calldata immutables) external',
-      'function cancel(address escrow, bytes calldata immutables) external'
-    ]
-    
-    const resolverContract = new ethers.Contract(resolverAddress, resolverABI, signer)
-
-    // For now, let's use a simplified approach by calling the resolver with basic parameters
-    // In the full implementation, we'd need to reconstruct the CrossChainOrder properly
-    console.log('Calling resolver.deploySrc with simplified parameters:', {
-      orderBytes: '0x', // Placeholder
-      r,
-      vs,
-      amount: fillAmountBigInt.toString(),
-      value: srcSafetyDeposit.toString()
-    })
-
-    // Simplified call - just transfer the USDC to resolver for now
-    // This simulates the escrow lock until we have the full resolver contract deployed
-    const provider_rpc = new ethers.JsonRpcProvider(SWAP_CONFIG.source.rpcUrl)
     const userAddress = await signer.getAddress()
     
-    // ERC20 ABI for USDC transfer
+    const fillAmountBigInt = ethers.parseUnits(fillAmount, 6)
+
+    // ERC20 ABI for USDC approval
     const ERC20_ABI = [
-      'function transfer(address to, uint256 amount) external returns (bool)',
       'function approve(address spender, uint256 amount) external returns (bool)',
       'function allowance(address owner, address spender) external view returns (uint256)',
       'function balanceOf(address account) external view returns (uint256)'
@@ -302,29 +266,72 @@ export async function deploySourceEscrow(
       signer
     )
 
-    // Check allowance and approve if needed
-    const currentAllowance = await usdcContract.allowance(userAddress, resolverAddress)
+    // Check current allowance to LimitOrderProtocol (not resolver directly)
+    const limitOrderProtocol = SWAP_CONFIG.source.limitOrderProtocol
+    const currentAllowance = await usdcContract.allowance(userAddress, limitOrderProtocol)
     
+    console.log('Current USDC allowance to LimitOrderProtocol:', ethers.formatUnits(currentAllowance, 6))
+    console.log('Required amount:', ethers.formatUnits(fillAmountBigInt, 6))
+
+    // Approve USDC to LimitOrderProtocol if needed (like in test)
     if (currentAllowance < fillAmountBigInt) {
-      console.log('Approving USDC spending...')
-      const approveTx = await usdcContract.approve(resolverAddress, fillAmountBigInt)
-      await approveTx.wait()
-      console.log('USDC approval confirmed:', approveTx.hash)
+      console.log('Approving USDC to LimitOrderProtocol for resolver to use...')
+      const approveTx = await usdcContract.approve(limitOrderProtocol, fillAmountBigInt)
+      const receipt = await approveTx.wait()
+      console.log('USDC approval confirmed:', receipt.hash)
+      
+      // Now call the API for resolver to execute deploySrc
+      console.log('Requesting resolver to execute deploySrc transaction...')
+      const deployResponse = await fetch('/api/deploy-source', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderData,
+          signature,
+          fillAmount,
+          userAddress
+        })
+      })
+
+      const deployResult = await deployResponse.json()
+      
+      if (!deployResponse.ok) {
+        throw new Error(deployResult.error || 'Resolver deployment failed')
+      }
+
+      console.log('Resolver executed deploySrc:', deployResult.txHash)
+      return deployResult.txHash
+    } else {
+      console.log('Sufficient allowance exists, requesting resolver to execute deploySrc...')
+      
+      // Call the API for resolver to execute deploySrc
+      const deployResponse = await fetch('/api/deploy-source', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderData,
+          signature,
+          fillAmount,
+          userAddress
+        })
+      })
+
+      const deployResult = await deployResponse.json()
+      
+      if (!deployResponse.ok) {
+        throw new Error(deployResult.error || 'Resolver deployment failed')
+      }
+
+      console.log('Resolver executed deploySrc:', deployResult.txHash)
+      return deployResult.txHash
     }
 
-    // Transfer USDC to resolver (simulating escrow lock)
-    console.log('Transferring USDC to resolver (escrow lock)...')
-    const transferTx = await usdcContract.transfer(resolverAddress, fillAmountBigInt)
-    
-    console.log('USDC transfer transaction sent:', transferTx.hash)
-    
-    const receipt = await transferTx.wait()
-    console.log('USDC locked in escrow (simplified):', receipt.hash)
-    
-    return receipt.hash
-
   } catch (error) {
-    console.error('Error deploying source escrow:', error)
+    console.error('Error setting up source escrow deployment:', error)
     throw error
   }
 }
