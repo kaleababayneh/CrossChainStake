@@ -22,8 +22,6 @@ const mnemonic2 = process.env.MNEMONIC2 as string
 const wallet = PrivateKey.fromMnemonic(mnemonic)
 const address = wallet.toAddress().toBech32()
 
-const wallet2 = PrivateKey.fromMnemonic(mnemonic2)
-const address2 = wallet2.toAddress().toBech32()
 
 const codeId = 33343 // e.g. "33340"
 const contractLabel = 'CW20 Atomic Swap'
@@ -176,12 +174,12 @@ const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e
 export async function claim_funds() {
     const swapId = SWAP_ID // e.g. 'swap-cusdc-001'
     const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-    console.log(`🔓 Claiming CUSDC from swap "${swapId}" by revealing preimage from ${address2}`)
+    console.log(`🔓 Claiming CUSDC from swap "${swapId}" by revealing preimage from ${address}`)
   
     const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,
       chainId: ChainId.Testnet,
-      privateKey: wallet2,
+      privateKey: wallet,
       endpoints: {
         grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
         rest: 'https://testnet.sentry.lcd.injective.network',
@@ -193,11 +191,12 @@ export async function claim_funds() {
       release: {
         id: swapId,
         preimage,
+        recipient: recipientAddress,
       },
     }
   
     const msg = MsgExecuteContractCompat.fromJSON({
-      sender: address2,
+      sender: address,
       contractAddress, // your atomic swap contract address
       msg: executeMsg,
       funds: [], // no funds sent during release
@@ -271,13 +270,13 @@ export async function fund_dst_escrow_with_params(
   return { swapId, txHash: tx.txHash }
 }
 
-export async function claim_funds_with_params(swapId: string, preimage: string) {
-  console.log(`🔓 Claiming CUSDC from swap "${swapId}" from ${address2}`)
+export async function claim_funds_with_params(swapId: string, preimage: string, recipient: string) {
+  console.log(`🔓 Claiming CUSDC from swap "${swapId}" from ${address}`)
   
   const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,
       chainId: ChainId.Testnet,
-      privateKey: wallet2,
+      privateKey: wallet,
       endpoints: {
           grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
           rest: 'https://testnet.sentry.lcd.injective.network',
@@ -289,11 +288,12 @@ export async function claim_funds_with_params(swapId: string, preimage: string) 
     release: {
       id: swapId,
       preimage,
+      recipient: recipientAddress,
     },
   }
 
   const msg = MsgExecuteContractCompat.fromJSON({
-    sender: address2,
+    sender: address,
     contractAddress, // your escrow contract
     msg: executeMsg,
     funds: [], // nothing is sent; we're just unlocking the escrow
@@ -307,8 +307,8 @@ export async function claim_funds_with_params(swapId: string, preimage: string) 
   return tx.txHash
 }
 
-export async function claim_funds_with_params_resolver(swapId: string, preimage: string) {
-  console.log(`🔓 Resolver claiming CUSDC from swap "${swapId}" from ${address}`) // Note: using wallet (resolver), not wallet2 (user)
+export async function claim_funds_with_params_resolver(swapId: string, preimage: string, recipient: string) {
+  console.log(`🔓 Resolver claiming CUSDC from swap "${swapId}" from ${address}`) 
   
   const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,
@@ -325,6 +325,7 @@ export async function claim_funds_with_params_resolver(swapId: string, preimage:
     release: {
       id: swapId,
       preimage,
+      recipient: recipientAddress,
     },
   }
 

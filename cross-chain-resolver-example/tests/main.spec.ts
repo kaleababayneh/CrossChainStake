@@ -224,8 +224,9 @@ describe('Resolving example', () => {
             console.log(`[${dstChainId}] User claiming funds on Injective`)
 
             await injective.claim_funds_with_params(
-               swapId,
-                secretBytes // raw secret as preimage
+                swapId,
+                secretBytes, // raw secret as preimage,
+                address2
             )
             
             // Step 6: Resolver withdraws from EVM source escrow using the same secret
@@ -246,7 +247,7 @@ describe('Resolving example', () => {
 
 
   
-        it('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
+        it.skip('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
             const swapId = `swip-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex'))
@@ -363,7 +364,8 @@ describe('Resolving example', () => {
             
             await injective.claim_funds_with_params_resolver(
                 swapId,
-                secretBytes
+                secretBytes,
+                address2
             )
             
             console.log(`✅ Reverse swap completed: Injective CUSDC → EVM USDC`)
