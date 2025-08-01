@@ -41,6 +41,7 @@ const resolverPublicAddress = resolverWallet.address;
 
 console.log("userPublicAddress", userPublicAddress)
 console.log("resolverPublicAddress", resolverPublicAddress)
+
 const ownerPrivateKey = '0x8bc5e2d9a1ec77c51fd83dc78622222c8b2f1eadaa361eae31409a702ec21c27'
 
 const injectiveUserPk = "snap half peasant letter empty kid cement vast comic trigger goat speed explain frog busy sand dial quote victory crew detail airport recall chef"
