@@ -249,6 +249,24 @@ describe('Resolving example', () => {
             
             const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(deployTxRequest)
             
+            console.log('✅ TRANSACTION SENT:')
+            console.log('Transaction hash:', orderFillHash)
+            console.log('Block hash:', srcDeployBlock)
+
+            // Get the full transaction receipt for detailed logging
+            const txReceipt = await src.provider.getTransactionReceipt(orderFillHash)
+            console.log('📋 TRANSACTION RECEIPT:')
+            console.log('Block number:', txReceipt?.blockNumber)
+            console.log('Gas used:', txReceipt?.gasUsed?.toString())
+            console.log('Status:', txReceipt?.status) // 1 = success, 0 = failed
+            console.log('From:', txReceipt?.from)
+            console.log('To:', txReceipt?.to)
+
+            // Parse and log all events
+            console.log('📋 TRANSACTION LOGS:')
+            console.log('Total logs:', txReceipt?.logs?.length || 0)
+
+
             console.log('✅ DEPLOY SRC RESULT:')
             console.log(`[${srcChainId}] Source escrow deployed in tx ${orderFillHash}`)
             console.log('Block hash:', srcDeployBlock)
