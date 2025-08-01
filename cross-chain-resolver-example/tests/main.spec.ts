@@ -33,15 +33,12 @@ jest.setTimeout(1000 * 60 * 3)
 
 const userPk = '0x3897c33f920e4594c9321f78208b8cf1646f45fd807a78ef0985cc607eea4f51'
 const resolverPk = '0x0a8453b8a66dc0e4cf0afcea4b961b6bcd4bd2d4d378c7512f8eb3a7aea255b3'
-const userWallet = new ethers.Wallet(userPk);
-const userPublicAddress = userWallet.address;
 
-const resolverWallet = new ethers.Wallet(resolverPk);
-const resolverPublicAddress = resolverWallet.address;
+const userPublicAddress = "0xaA83fCB728c9d1e039B35DeDB8a18736A50ab6EE"
+const resolverPublicAddress = "0x54E13447C59e6d0b844c8e2af22479b7ccc7D47D"
 
 console.log("userPublicAddress", userPublicAddress)
 console.log("resolverPublicAddress", resolverPublicAddress)
-
 const ownerPrivateKey = '0x8bc5e2d9a1ec77c51fd83dc78622222c8b2f1eadaa361eae31409a702ec21c27'
 
 const injectiveUserPk = "snap half peasant letter empty kid cement vast comic trigger goat speed explain frog busy sand dial quote victory crew detail airport recall chef"

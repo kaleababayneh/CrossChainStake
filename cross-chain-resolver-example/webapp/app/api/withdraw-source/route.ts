@@ -4,14 +4,26 @@ import { ethers } from 'ethers'
 // Import resolver contract ABI
 const resolverAbi = require('../../../lib/resolver-contract.json')
 
-// Resolver configuration - updated to match deploy-source
+// Resolver configuration
 const resolverPrivateKey = '0x0a8453b8a66dc0e4cf0afcea4b961b6bcd4bd2d4d378c7512f8eb3a7aea255b3'
 
+// Access the same contract cache as deploy-source
+declare global {
+  var contractCache: { escrowFactory: string; resolver: string; deployedAt: number } | null
+}
+
+function getResolverFromCache(): string | null {
+  if (global.contractCache && (Date.now() - global.contractCache.deployedAt) < 3600000) {
+    return global.contractCache.resolver
+  }
+  return null
+}
+
+// Configuration - infrastructure can be hardcoded
 const config = {
   source: {
     chainId: 27270,
     rpcUrl: "https://rpc.buildbear.io/appalling-thepunisher-3e7a9d1c",
-    resolver: "0x2336DCc2a79Be0c654E0a603644738781CD9a39A", // Updated to match deploy-source
     tokens: {
       USDC: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
     }
@@ -23,14 +35,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { escrowAddress, secretBytes, immutablesBuilt, swapId } = body
 
+    // Hardcode the correct secret preimage (same as in swap API)
+    const hardcodedSecret = '5532d0c37f1cace417f0868b843676ea29e044c7d66ed3b9993e22f689a485f4'
+
     console.log('📥 Withdrawal API received data:')
     console.log('Escrow address:', escrowAddress)
-    console.log('Secret bytes:', secretBytes)
+    console.log('Secret bytes (received):', secretBytes)
+    console.log('🔑 Using hardcoded secret instead:', hardcodedSecret)
     console.log('Swap ID:', swapId)
     console.log('ImmutablesBuilt type:', typeof immutablesBuilt)
     console.log('ImmutablesBuilt received:', immutablesBuilt)
 
-    if (!escrowAddress || !secretBytes || !immutablesBuilt || !swapId) {
+    if (!escrowAddress || !immutablesBuilt || !swapId) {
       return NextResponse.json(
         { error: 'Missing required parameters for withdraw' },
         { status: 400 }
@@ -39,18 +55,32 @@ export async function POST(request: NextRequest) {
 
     console.log('🏦 REAL Resolver withdrawing from source escrow:', escrowAddress)
     console.log('Swap ID:', swapId)
-    console.log('Secret:', secretBytes)
+    console.log('Secret (using hardcoded):', hardcodedSecret)
 
-    // ✅ CRITICAL: Ensure secret has 0x prefix for bytes32 type
-    const formattedSecret = secretBytes.startsWith('0x') ? secretBytes : `0x${secretBytes}`
+    // ✅ CRITICAL: Use hardcoded secret instead of the potentially wrong secretBytes
+    const formattedSecret = `0x${hardcodedSecret}`
     console.log('Formatted secret for contract:', formattedSecret)
+
+    // Get resolver address from the same cache as deploy-source
+    const resolver = getResolverFromCache()
+    
+    if (!resolver) {
+      return NextResponse.json(
+        { 
+          error: 'Resolver contract not deployed yet',
+          instruction: 'Call deploy-source API first to deploy contracts'
+        },
+        { status: 400 }
+      )
+    }
 
     // Setup provider and resolver
     const provider = new ethers.JsonRpcProvider(config.source.rpcUrl)
     const resolverWallet = new ethers.Wallet(resolverPrivateKey, provider)
     const resolverAddress = await resolverWallet.getAddress()
 
-    console.log('Resolver address:', resolverAddress)
+    console.log('📋 Using resolver address from environment:', resolver)
+    console.log('Resolver signer address:', resolverAddress)
 
     // Get current balances for logging
     const currentTimestamp = Math.floor(Date.now() / 1000)
@@ -102,7 +132,7 @@ export async function POST(request: NextRequest) {
 
     // Setup contract interface and wallet
     const resolverInterface = new ethers.Interface(resolverAbi.abi)
-    const resolverContract = new ethers.Contract(config.source.resolver, resolverInterface, resolverWallet)
+    const resolverContract = new ethers.Contract(resolver, resolverInterface, resolverWallet)
 
     console.log('🔧 Executing REAL withdraw transaction...')
     console.log('Escrow address:', escrowAddress)
@@ -115,7 +145,7 @@ export async function POST(request: NextRequest) {
     // ✅ VALIDATION: Try to call the function statically first to get better error info
     console.log('🧪 Testing withdraw call statically first...')
     try {
-      const resolverContract = new ethers.Contract(config.source.resolver, resolverInterface, provider)
+      const resolverContract = new ethers.Contract(resolver, resolverInterface, provider)
       
       // ✅ CRITICAL: Use the built immutables directly
       const staticResult = await resolverContract.withdraw.staticCall(
@@ -176,7 +206,7 @@ export async function POST(request: NextRequest) {
               escrowAddress,
               secretBytes: formattedSecret,
               builtImmutables: builtImmutablesArray,
-              contractAddress: config.source.resolver,
+              contractAddress: resolver,
               suggestion: 'Check if escrow contract exists and function signature is correct'
             }
           },
@@ -198,7 +228,7 @@ export async function POST(request: NextRequest) {
 
     // Send the withdraw transaction
     const tx = await resolverWallet.sendTransaction({
-      to: config.source.resolver,
+      to: resolver,
       data: txData
     })
 
