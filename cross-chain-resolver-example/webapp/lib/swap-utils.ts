@@ -243,7 +243,14 @@ export async function deploySourceEscrow(
   order: Sdk.CrossChainOrder,
   signature: string,
   fillAmount: string
-): Promise<string> {
+): Promise<{
+  txHash: string;
+  escrowAddress: string;
+  immutablesBuilt: any[];
+  secretBytes: string;
+  blockNumber?: number;
+  gasUsed?: string;
+}> {
   if (!window.ethereum) {
     throw new Error('MetaMask not found')
   }
@@ -345,7 +352,7 @@ export async function deploySourceEscrow(
     }
 
     console.log('Resolver executed deploySrc:', deployResult.txHash)
-    return deployResult.txHash
+    return deployResult
     
   } catch (error) {
     console.error('Error setting up source escrow deployment:', error)

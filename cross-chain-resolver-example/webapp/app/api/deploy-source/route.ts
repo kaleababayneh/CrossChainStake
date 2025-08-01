@@ -272,27 +272,47 @@ try {
     console.log('⚠️  NO EVENTS EMITTED - This might indicate the transaction did not perform expected operations');
   }
   
+  // REAL USDC is now locked in escrow contract, user's balance is reduced
+  return NextResponse.json({
+    success: true,
+    txHash: tx.hash,
+    blockNumber: receipt?.blockNumber,
+    gasUsed: receipt?.gasUsed?.toString(),
+    resolverAddress,
+    userAddress,
+    fillAmount,
+    message: 'REAL Resolver.deploySrc executed successfully - USDC locked in escrow!',
+    escrowDeployed: true,
+    realTransaction: true,
+    // ✅ Extract escrow address from USDC Transfer event logs
+    escrowAddress: (() => {
+      if (receipt?.logs && receipt.logs.length > 0) {
+        const usdcTransferLog = receipt.logs.find((log: any) => 
+          log.address.toLowerCase() === config.source.tokens.USDC.toLowerCase() &&
+          log.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' // Transfer event signature
+        )
+        if (usdcTransferLog && usdcTransferLog.topics.length >= 3) {
+          return '0x' + usdcTransferLog.topics[2].slice(26) // topics[2] is the 'to' address
+        }
+      }
+      return null
+    })(),
+    // ✅ Return the built immutables array for withdrawal
+    immutablesBuilt: immutables,
+    // ✅ Return the secret bytes for withdrawal
+    secretBytes: extensionData
+  })
+  
 } catch (err) {
   console.error("Transaction failed with error:", err);
+  return NextResponse.json(
+    { 
+      error: 'Failed to execute REAL deploySrc', 
+      details: err?.toString()
+    },
+    { status: 500 }
+  )
 }
-    // console.log('✅ REAL deploySrc transaction confirmed!')
-    // console.log('Block number:', receipt?.blockNumber)
-    // console.log('Gas used:', receipt?.gasUsed?.toString())
-    
-    // REAL USDC is now locked in escrow contract, user's balance is reduced
-
-    return NextResponse.json({
-      success: true,
-      txHash: tx.hash,
-      blockNumber: 'pending',
-      gasUsed: 'pending',
-      resolverAddress,
-      userAddress,
-      fillAmount,
-      message: 'REAL Resolver.deploySrc executed successfully - USDC locked in escrow!',
-      escrowDeployed: true,
-      realTransaction: true
-    })
 
   } catch (error) {
     console.error('Deploy source API error:', error)

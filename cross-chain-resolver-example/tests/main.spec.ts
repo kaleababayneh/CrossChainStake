@@ -5,6 +5,7 @@ import Sdk from '@1inch/cross-chain-sdk'
 import {
     computeAddress,
     ContractFactory,
+    ethers,
     JsonRpcProvider,
     MaxUint256,
     parseEther,
@@ -32,6 +33,15 @@ jest.setTimeout(1000 * 60 * 3)
 
 const userPk = '0x3897c33f920e4594c9321f78208b8cf1646f45fd807a78ef0985cc607eea4f51'
 const resolverPk = '0x0a8453b8a66dc0e4cf0afcea4b961b6bcd4bd2d4d378c7512f8eb3a7aea255b3'
+const userWallet = new ethers.Wallet(userPk);
+const userPublicAddress = userWallet.address;
+
+const resolverWallet = new ethers.Wallet(resolverPk);
+const resolverPublicAddress = resolverWallet.address;
+
+console.log("userPublicAddress", userPublicAddress)
+console.log("resolverPublicAddress", resolverPublicAddress)
+const ownerPrivateKey = '0x8bc5e2d9a1ec77c51fd83dc78622222c8b2f1eadaa361eae31409a702ec21c27'
 
 const injectiveUserPk = "snap half peasant letter empty kid cement vast comic trigger goat speed explain frog busy sand dial quote victory crew detail airport recall chef"
 const injectiveResolverPk = "soda giggle lobster frown sponsor bridge follow firm fashion buddy final this crawl junior burst race differ school pupil bleak above economy toy chunk"
@@ -124,6 +134,14 @@ describe('Resolving example', () => {
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex')) // This will automatically include "0x" prefix
             const secret = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
 
+            console.log('🔧 TEST SETUP:')
+            console.log('Swap ID:', swapId)
+            console.log('Secret bytes (raw):', secretBytes)
+            console.log('Secret bytes (hex with 0x):', secretBytesX)
+            console.log('Secret hash:', secret)
+            console.log('User address:', await srcChainUser.getAddress())
+            console.log('Resolver address:', await srcChainResolver.getAddress())
+
              const order = Sdk.CrossChainOrder.new(
                 new Address(src.escrowFactory),
                 {
@@ -172,38 +190,87 @@ describe('Resolving example', () => {
                 }
             )
             
+            console.log('📋 ORDER CREATED:')
+            console.log('Order salt:', order.salt.toString())
+            console.log('Order maker:', order.maker.toString())
+            console.log('Order making amount:', order.makingAmount.toString())
+            console.log('Order taking amount:', order.takingAmount.toString())
+            console.log('Order maker asset:', order.makerAsset.toString())
+            console.log('Order taker asset:', order.takerAsset.toString())
+            console.log('Src safety deposit:', order.escrowExtension.srcSafetyDeposit.toString())
+            console.log('Time locks created with srcWithdrawal: 10 seconds')
+            
             const signature = await srcChainUser.signOrder(srcChainId, order)
             const orderHash = order.getOrderHash(srcChainId)
+
+            console.log('✍️ ORDER SIGNED:')
+            console.log('Signature:', signature)
+            console.log('Order hash:', orderHash)
 
            
            // const resolverContract = new Resolver(src.resolver, dst.resolver)
             console.log(`[${srcChainId}]`, `Filling order ${orderHash}`)
             const fillAmount = order.makingAmount
 
+            console.log('💰 FILL PARAMETERS:')
+            console.log('Fill amount:', fillAmount.toString())
+            console.log('Resolver contract src address:', src.resolver)
+            console.log('Resolver contract dst address:', dst.resolver)
+
         
             const resolverContract = new Resolver(src.resolver, dst.resolver)
 
             // Step 2: Deploy source escrow on EVM side using 1inch SDK
             console.log(`[${srcChainId}] Deploying source escrow for order ${orderHash}`)
-            const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(
-                resolverContract.deploySrc(
-                    srcChainId,
-                    order,
-                    signature,
-                    Sdk.TakerTraits.default()
-                        .setExtension(order.extension)
-                        .setAmountMode(Sdk.AmountMode.maker)
-                        .setAmountThreshold(order.takingAmount),
-                    fillAmount
-                )
+            
+            console.log('🚀 DEPLOY SRC PARAMETERS:')
+            const takerTraits = Sdk.TakerTraits.default()
+                .setExtension(order.extension)
+                .setAmountMode(Sdk.AmountMode.maker)
+                .setAmountThreshold(order.takingAmount)
+            
+            const {args, trait} = takerTraits.encode()
+            console.log('Taker traits value:', trait.toString())
+            console.log('Taker traits args:', args)
+            console.log('Chain ID:', srcChainId)
+            console.log('Order extension:', order.extension)
+            console.log('Amount mode:', Sdk.AmountMode.maker)
+            console.log('Amount threshold:', order.takingAmount.toString())
+            
+            const deployTxRequest = resolverContract.deploySrc(
+                srcChainId,
+                order,
+                signature,
+                takerTraits,
+                fillAmount
             )
             
+            console.log('📤 DEPLOY TX REQUEST:')
+            console.log('To:', deployTxRequest.to)
+            console.log('Value:', deployTxRequest.value?.toString())
+            console.log('Data length:', deployTxRequest.data?.length)
+            
+            const {txHash: orderFillHash, blockHash: srcDeployBlock} = await srcChainResolver.send(deployTxRequest)
+            
+            console.log('✅ DEPLOY SRC RESULT:')
             console.log(`[${srcChainId}] Source escrow deployed in tx ${orderFillHash}`)
+            console.log('Block hash:', srcDeployBlock)
+            
             const srcEscrowEvent = await srcFactory.getSrcDeployEvent(srcDeployBlock)
+            console.log('📋 SRC ESCROW EVENT:')
+            console.log('Escrow event immutables:', srcEscrowEvent[0])
 
             // Step 3: Fund destination escrow on Injective using your custom contract
             const address2 = "inj12nnymkfwlr6c6c5ksmrq29nlh4x0pmls6xmkc9"
             console.log(`[${dstChainId}] Funding Injective atomic swap contract`)
+            
+            console.log('💰 INJECTIVE FUNDING PARAMETERS:')
+            console.log('Secret bytes (raw):', secretBytes)
+            console.log('Fill amount:', fillAmount.toString())
+            console.log('Recipient address:', address2)
+            console.log('Expiry height:', 90_000_000)
+            console.log('Swap ID:', swapId)
+            
             await injective.fund_dst_escrow_with_params(
                 secretBytes, // Pass the raw secret to generate the hash
                 fillAmount.toString(),
@@ -213,10 +280,18 @@ describe('Resolving example', () => {
             )
 
             // Step 4: Wait for finality lock to pass
+            console.log('⏰ WAITING FOR FINALITY LOCK:')
+            console.log('Increasing time by 11 seconds...')
             await increaseTime(11)
+            console.log('✅ Time increased, finality lock should be passed')
 
             // Step 5: User claims funds on Injective by revealing the secret
             console.log(`[${dstChainId}] User claiming funds on Injective`)
+
+            console.log('🔓 INJECTIVE CLAIM PARAMETERS:')
+            console.log('Swap ID:', swapId)
+            console.log('Secret bytes (raw for preimage):', secretBytes)
+            console.log('Recipient address:', address2)
 
             await injective.claim_funds_with_params(
                 swapId,
@@ -231,11 +306,29 @@ describe('Resolving example', () => {
                 ESCROW_SRC_IMPLEMENTATION
             )
             
-            console.log(`[${srcChainId}] Resolver withdrawing from source escrow ${srcEscrowAddress}`)
-            const {txHash: resolverWithdrawHash} = await srcChainResolver.send(
-                resolverContract.withdraw('src', srcEscrowAddress, secretBytesX, srcEscrowEvent[0])
-            )
+            console.log('🏦 WITHDRAWAL SETUP:')
+            console.log('Escrow src implementation:', ESCROW_SRC_IMPLEMENTATION)
+            console.log('Calculated src escrow address:', srcEscrowAddress.toString())
+            console.log('Escrow factory address:', src.escrowFactory)
             
+            console.log(`[${srcChainId}] Resolver withdrawing from source escrow ${srcEscrowAddress}`)
+            
+            console.log('💸 WITHDRAWAL PARAMETERS:')
+            console.log('Withdrawal side:', 'src')
+            console.log('Escrow address:', srcEscrowAddress.toString())
+            console.log('Secret (with 0x prefix):', secretBytesX)
+            console.log('Immutables from event:', srcEscrowEvent[0])
+            console.log('Resolver address calling withdraw:', await srcChainResolver.getAddress())
+            
+            const withdrawTxRequest = resolverContract.withdraw('src', srcEscrowAddress, secretBytesX, srcEscrowEvent[0])
+            
+            console.log('📤 WITHDRAW TX REQUEST:')
+            console.log('To:', withdrawTxRequest.to)
+            console.log('Data length:', withdrawTxRequest.data?.length)
+            
+            const {txHash: resolverWithdrawHash} = await srcChainResolver.send(withdrawTxRequest)
+            
+            console.log('✅ WITHDRAWAL RESULT:')
             console.log(`[${srcChainId}] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
            
         }) 
@@ -822,6 +915,11 @@ async function initEthereumChain(
    
 ):  Promise<{ provider: JsonRpcProvider; escrowFactory: string; resolver: string}> {
     
+    // ✅ Option 1: Use shared deployment if available (to match webapp)
+    
+    
+    // ✅ Option 2: Deploy fresh contracts (default behavior)
+    console.log(`[${cnf.chainId}] Deploying fresh contracts (test default)`)
     const deployer = new SignerWallet(cnf.ownerPrivateKey, provider)
 
     // deploy EscrowFactory

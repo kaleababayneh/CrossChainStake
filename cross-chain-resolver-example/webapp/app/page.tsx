@@ -286,14 +286,14 @@ export default function TokenSwap() {
       setIsDeployingSource(true)
       console.log('🔄 Auto-executing: Deploying source escrow...')
       
-      const sourceEscrowTxHash = await deploySourceEscrow(
+      const deployResult = await deploySourceEscrow(
         swapResponse.order,
         swapResponse.signature,
         swapResponse.fillAmount
       )
       
-      setSourceEscrowTx(sourceEscrowTxHash)
-      console.log('✅ Source escrow deployed:', sourceEscrowTxHash)
+      setSourceEscrowTx(deployResult.txHash)
+      console.log('✅ Source escrow deployed:', deployResult.txHash)
       setIsDeployingSource(false)
 
       // Small delay between steps for better UX
@@ -328,9 +328,9 @@ export default function TokenSwap() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          escrowAddress: '0x' + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join(''), // Generate proper 40-char address
-          secretBytes: swapResponse.secretBytes,
-          immutables: [], // Use empty array for now (TODO: Get real immutables from srcEscrowEvent)  
+          escrowAddress: deployResult.escrowAddress, // ✅ Use real escrow address from deploy
+          secretBytes: deployResult.secretBytes,     // ✅ Use real secret from deploy
+          immutablesBuilt: deployResult.immutablesBuilt, // ✅ Use real immutables from deploy
           swapId: swapResponse.swapId
         })
       })
