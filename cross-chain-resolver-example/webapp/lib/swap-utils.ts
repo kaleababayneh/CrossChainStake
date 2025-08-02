@@ -139,7 +139,7 @@ export async function executeCrossChainSwap(
     'function arbitraryCalls(address[] calldata targets, bytes[] calldata arguments) external'
   ])
 
-  const usdcTransferData = '0xa9059cbb' +  coder.encode(['address', 'uint256'], [metaMaskAddress, parseUnits('8', 6)]).slice(2)
+  const usdcTransferData = '0xa9059cbb' +  coder.encode(['address', 'uint256'], [metaMaskAddress, parseUnits(takerAmountReq, 6)]).slice(2)
   const transferTxData = resolverInterface.encodeFunctionData('arbitraryCalls', [
     [SWAP_CONFIG.source.tokens.USDC], 
     [usdcTransferData] 
@@ -368,209 +368,180 @@ export async function executeCrossChainSwap(
 }
  else {
  
+    console.log(`[] User creating atomic swap on Injective`)
 
-  console.log(`[] User creating atomic swap on Injective`)
+    const lock_inj_on_src_chain = await injective.fund_dst_escrow_with_keplr(
+          createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex'),
+          parseUnits(makerAmountReq, 18).toString(),
+          injectiveResolverPublicKey, // INJ Resolver as recipient
+          90_000_000, // expiry height
+          swapId
+    )
+    console.log("lets ee", lock_inj_on_src_chain)
+      
 
-  const xyza = await injective.fund_dst_escrow_with_keplr(
-        createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex'),
-        "300000000", 
-        injectiveResolverPublicKey, // INJ Resolver as recipient
-        90_000_000, // expiry height
-        swapId
-   )
-
-
- console.log("lets ee", xyza)
- 
-
-
-        const reverseOrder = Sdk.CrossChainOrder.new(
-                new Address(escrowFactory),
-                {
-                    salt: Sdk.randBigInt(1000),
-                    maker: new Address(evmResolverPublicKey), // User is maker
-                    makingAmount: parseUnits('8', 6), // 1 USDC  
-                    takingAmount: parseUnits('8', 6), // 1 CUSDC equivalent
-                    makerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"), // USDC
-                    takerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") // USDC
-                },
-                {
-                    hashLock: Sdk.HashLock.forSingleFill(secretBytesHex),
-                    timeLocks: Sdk.TimeLocks.new({
-                        srcWithdrawal: BigInt(10), // 10sec finality lock for test
-                        srcPublicWithdrawal: BigInt(120), // 2m for private withdrawal
-                        srcCancellation: BigInt(121), // 1sec public cancellation
-                        srcPublicCancellation: BigInt(122), // 1sec private cancellation
-                        dstWithdrawal: BigInt(10), // 10sec finality lock for test
-                        dstPublicWithdrawal: BigInt(100), // 100sec private withdrawal
-                        dstCancellation: BigInt(101) // 1sec public cancellation
-                    }),
-                    srcChainId: Sdk.NetworkEnum.ETHEREUM,
-                    dstChainId: Sdk.NetworkEnum.COINBASE,
-                    srcSafetyDeposit: parseEther('0.001'),
-                    dstSafetyDeposit: parseEther('0.001')
-                },
-                {
-                    auction: new Sdk.AuctionDetails({
-                        initialRateBump: 0,
-                        points: [],
-                        duration: BigInt(120), // 2 minutes
-                        startTime: srcTimestamp
-                    }),
-                    whitelist: [
-                        {
-                            address: new Address(resolver), // Resolver can fill
-                            allowFrom: BigInt(0) // Allow from anyone
-                        }
-                    ],
-                    resolvingStartTime: BigInt(0)
-                },
-                {
-                    nonce: Sdk.randBigInt(UINT_40_MAX),
-                    allowPartialFills: false,
-                    allowMultipleFills: false
-                }
-            )
+    const reverseOrder = Sdk.CrossChainOrder.new(
+        new Address(escrowFactory),
+          {
+              salt: Sdk.randBigInt(1000),
+              maker: new Address(evmResolverPublicKey), // resolver is maker
+              makingAmount: parseUnits(takerAmountReq, 6), 
+              takingAmount: parseUnits(makerAmountReq, 6), 
+              makerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"), // USDC
+              takerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") // USDC
+          },
+          {
+              hashLock: Sdk.HashLock.forSingleFill(secretBytesHex),
+              timeLocks: Sdk.TimeLocks.new({
+                  srcWithdrawal: BigInt(10), // 10sec finality lock for test
+                  srcPublicWithdrawal: BigInt(120), // 2m for private withdrawal
+                  srcCancellation: BigInt(121), // 1sec public cancellation
+                  srcPublicCancellation: BigInt(122), // 1sec private cancellation
+                  dstWithdrawal: BigInt(10), // 10sec finality lock for test
+                  dstPublicWithdrawal: BigInt(100), // 100sec private withdrawal
+                  dstCancellation: BigInt(101) // 1sec public cancellation
+              }),
+              srcChainId: Sdk.NetworkEnum.ETHEREUM,
+              dstChainId: Sdk.NetworkEnum.COINBASE,
+              srcSafetyDeposit: parseEther('0.001'),
+              dstSafetyDeposit: parseEther('0.001')
+          },
+          {
+              auction: new Sdk.AuctionDetails({
+                  initialRateBump: 0,
+                  points: [],
+                  duration: BigInt(120), // 2 minutes
+                  startTime: srcTimestamp
+              }),
+              whitelist: [
+                  {
+                      address: new Address(resolver), // Resolver can fill
+                      allowFrom: BigInt(0) // Allow from anyone
+                  }
+              ],
+              resolvingStartTime: BigInt(0)
+          },
+          {
+              nonce: Sdk.randBigInt(UINT_40_MAX),
+              allowPartialFills: false,
+              allowMultipleFills: false
+          }
+      )
         
-            const realChainId = SWAP_CONFIG.source.chainId // 27270
-            const typedData = reverseOrder.getTypedData(realChainId)
+      const realChainId = SWAP_CONFIG.source.chainId // 27270
+      const typedData = reverseOrder.getTypedData(realChainId)
 
-             const signature = await ResolverWallet.signTypedData(
-                  typedData.domain,
-                  { Order: typedData.types[typedData.primaryType] },
-                  typedData.message
-                )
+      const signature = await ResolverWallet.signTypedData(
+            typedData.domain,
+            { Order: typedData.types[typedData.primaryType] },
+            typedData.message
+          )
 
-            const orderHash = reverseOrder.getOrderHash(SWAP_CONFIG.source.chainId)
+      const orderHash = reverseOrder.getOrderHash(SWAP_CONFIG.source.chainId)
 
-
-
-
-            console.log(`Order Hash: ${orderHash} | Resolver filling reverse order`)
+      console.log(`Order Hash: ${orderHash} | Resolver filling reverse order`)
 
             
-const tx = resolverContract.deploySrc(
-                    SWAP_CONFIG.source.chainId,
-                    reverseOrder,
-                    signature,
-                    Sdk.TakerTraits.default()
-                        .setExtension(reverseOrder.extension)
-                        .setAmountMode(Sdk.AmountMode.maker)
-                        .setAmountThreshold(reverseOrder.takingAmount),
-                    reverseOrder.makingAmount
-                )
-   console.log('📤 DEPLOY TX REQUEST:', tx)
-                
+      const resolverTx = resolverContract.deploySrc(
+              SWAP_CONFIG.source.chainId,
+              reverseOrder,
+              signature,
+              Sdk.TakerTraits.default()
+                  .setExtension(reverseOrder.extension)
+                  .setAmountMode(Sdk.AmountMode.maker)
+                  .setAmountThreshold(reverseOrder.takingAmount),
+              reverseOrder.makingAmount
+      )
 
-      const Ftx = {
-                    ...tx,
+      console.log('📤 DEPLOY TX REQUEST:', resolverTx)
+
+    const transactionResponse = await ResolverWallet.sendTransaction({
+                    ...resolverTx,
                     gasLimit: 10_000_000,
 
-      }
-          const res = await ResolverWallet.sendTransaction(Ftx)
+      })
 
 
- const receipt = await res.wait(1)
+      const receipt = await transactionResponse.wait(1)
 
- console.log('📜 Transaction receipt:', receipt)
+      console.log('📜 Transaction receipt:', receipt)
 
-  const evmEscrowEvent = await srcFactory.parseSrcDeployEventFromReceipt(receipt)
+      const evmEscrowEvent = await srcFactory.parseSrcDeployEventFromReceipt(receipt)
 
-  console.log('📋 EVM ESCROW EVENT:', evmEscrowEvent)
-  await new Promise<void>(resolve => {
-    let countdown = 11
-    const interval = setInterval(() => {
-        console.log(`⏳ Countdown: ${countdown} seconds remaining`)
-        countdown -= 1
-        if (countdown < 0) {
-            clearInterval(interval)
-            resolve()
-        }
-    }, 1000)
-})
-
-
-
-const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
-const evmEscrowAddress = new Sdk.EscrowFactory(new Address(escrowFactory)).getSrcEscrowAddress(
-    evmEscrowEvent[0],
-    ESCROW_SRC_IMPLEMENTATION
-)
-
-console.log('🏦 WITHDRAWAL SETUP:', evmEscrowAddress)
+      console.log('📋 EVM ESCROW EVENT:', evmEscrowEvent)
+      // Extract the event from the receipt logs directly
+      await new Promise<void>(resolve => {
+        let countdown = 11
+        const interval = setInterval(() => {
+            console.log(`⏳ Countdown: ${countdown} seconds remaining`)
+            countdown -= 1
+            if (countdown < 0) {
+                clearInterval(interval)
+                resolve()
+            }
+        }, 1000)
+    })
 
 
-/**
- * 
-             const {txHash: userClaimHash} = await srcChainUser.send(
-                resolverContract.withdraw('src', evmEscrowAddress, secretBytesHex, evmEscrowEvent[0])
-            )
-            
-            console.log(`[${srcChainId}] User claimed USDC in tx ${userClaimHash}`)
- */
 
-  const resolverWithdrawTxRequest = resolverContract.withdraw('src', evmEscrowAddress, secretBytesHex, evmEscrowEvent[0])
-  //resolverWithdrawTxRequest.to = evmResolverPublicKey // Set the resolver contract as the recipient
-  console.log('📤 WITHDRAW TX REQUEST:')
-  console.log('To:', resolverWithdrawTxRequest.to)
-  console.log('Data length:', resolverWithdrawTxRequest.data?.length)
+    const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
+    const evmEscrowAddress = new Sdk.EscrowFactory(new Address(escrowFactory)).getSrcEscrowAddress(
+        evmEscrowEvent[0],
+        ESCROW_SRC_IMPLEMENTATION
+    )
 
-const Ftxy = {
-            ...resolverWithdrawTxRequest,
-            gasLimit: 10_000_000,
-            
-        }
-
- console.log('📤 WITHDRAW TX REQUEST:', Ftxy)
-
-  const withdrawTx = await ResolverWallet.sendTransaction(
-    Ftxy
-  )
-  const withdrawReceipt = await withdrawTx.wait(1)
-
-  const resolverWithdrawHash = withdrawReceipt?.hash
-
-  console.log('✅ WITHDRAWAL TX SENT SUCCESSFULLY!')
-  console.log('Withdrawal receipt:', withdrawReceipt)
-  console.log('✅ WITHDRAWAL RESULT:')
-  console.log(`[$] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
+    console.log('🏦 WITHDRAWAL SETUP:', evmEscrowAddress)
 
 
-// Add this new code to transfer funds from resolver contract to MetaMask
-console.log('🔄 TRANSFERRING FUNDS FROM RESOLVER TO METAMASK...')
 
-// Import at the top of the file if not already imported
-
-// Create resolver interface
-
-
-// Encode USDC transfer call: transfer(address to, uint256 amount)
+      const resolverWithdrawTxRequest = resolverContract.withdraw('src', evmEscrowAddress, secretBytesHex, evmEscrowEvent[0])
+      console.log('📤 WITHDRAW TX REQUEST:')
+      console.log('To:', resolverWithdrawTxRequest.to)
+      console.log('Data length:', resolverWithdrawTxRequest.data?.length)
 
 
-const transferTx = await ResolverWallet.sendTransaction({
-  to: resolver, // resolver contract address
-  data: transferTxData,
-  gasLimit: 10_000_000
-})
+      const withdrawTx = await ResolverWallet.sendTransaction(
+      {
+                ...resolverWithdrawTxRequest,
+                gasLimit: 10_000_000,
+                
+            }
+      )
+      const withdrawReceipt = await withdrawTx.wait(1)
 
-const transferReceipt = await transferTx.wait(1)
+      const resolverWithdrawHash = withdrawReceipt?.hash
 
-console.log('Transfer tx hash:', transferReceipt?.hash)
-console.log(` ${metaMaskAddress}`)
-           
+      console.log('✅ WITHDRAWAL TX SENT SUCCESSFULLY!')
+      console.log('Withdrawal receipt:', withdrawReceipt)
+      console.log('✅ WITHDRAWAL RESULT:')
+      console.log(`[$] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
 
 
-   const azya = await injective.claim_funds_with_params_resolver(
-                swapId,
-                secretBytes,
-                injectiveResolverPublicKey,
-                injectiveResolverMnemonic // Pass the mnemonic for Injective resolver
-  )
+    
 
-  console.log("lets ee", azya)
 
-  console.log('✅ Injective claim transaction sent successfully!')
-  
+        const transferTx = await ResolverWallet.sendTransaction({
+          to: resolver, // resolver contract address
+          data: transferTxData,
+          gasLimit: 10_000_000
+        })
+
+        const transferReceipt = await transferTx.wait(1)
+
+        console.log('Transfer tx hash:', transferReceipt?.hash)
+        console.log(` ${metaMaskAddress}`)
+                  
+
+
+      const resolver_claim = await injective.claim_funds_with_params_resolver(
+                    swapId,
+                    secretBytes,
+                    injectiveResolverPublicKey,
+                    injectiveResolverMnemonic // Pass the mnemonic for Injective resolver
+      )
+
+      console.log('✅ Injective claim transaction sent successfully!')
+      console.log('Claim receipt:',  resolver_claim)    
 }
 
 
@@ -581,7 +552,6 @@ console.log(` ${metaMaskAddress}`)
 }
         }
 
-// ...existing code...
 
 
 
