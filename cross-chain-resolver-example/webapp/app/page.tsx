@@ -18,7 +18,6 @@ import {
 import { ethers } from "ethers"
 
 
-// Types for wallet connections
 interface WalletState {
   isConnected: boolean
   address: string
@@ -27,7 +26,6 @@ interface WalletState {
   isLoadingBalance: boolean
 }
 
-// Token data separated by network
 const ethereumTokens = [{ symbol: "USDC", name: "USD Coin", logo: "/placeholder.svg?height=24&width=24" }]
 
 const cosmosTokens = [
@@ -211,6 +209,9 @@ export default function TokenSwap() {
     return ethereumToken || cosmosToken
   }
 
+
+  // FIX THIS
+
   // Handle amount changes
   const handleFromAmountChange = (value: string) => {
     setFromAmount(value)
@@ -257,13 +258,30 @@ const handleSwap = async () => {
     // ✅ Determine swap direction dynamically
     const isEvmToInj = fromToken === "USDC" // true for USDC->INJ, false for INJ->USDC
     console.log('Swap direction (EVM to Injective):', isEvmToInj)
+    const secretBytes =  Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('')
+    
 
-    // Execute the complete cross-chain swap
+    let makerAmountReq: string
+    let takerAmountReq: string
+    
+    if (isEvmToInj) {
+      // EVM to Injective: User gives USDC (maker), expects INJ (taker)
+      makerAmountReq = fromAmount // USDC amount user is giving
+      takerAmountReq = toAmount   // INJ amount user expects to receive
+    } else {
+      // Injective to EVM: User gives INJ (maker), expects USDC (taker)  
+      makerAmountReq = fromAmount // INJ amount user is giving
+      takerAmountReq = toAmount   // USDC amount user expects to receive
+    }
+
     const result = await executeCrossChainSwap(
-      fromAmount,
+      makerAmountReq,
+      takerAmountReq,
       metamaskWallet.fullAddress,
       keplrWallet.fullAddress,
-      isEvmToInj // ✅ Pass boolean value
+      isEvmToInj, // ✅ Pass boolean value,
+      secretBytes
+
     )
 
     console.log('🎉 CROSS-CHAIN SWAP COMPLETED!')
