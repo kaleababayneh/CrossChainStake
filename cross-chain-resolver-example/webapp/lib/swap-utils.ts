@@ -1,24 +1,16 @@
-import { ethers } from 'ethers'
+import { AbiCoder, ethers,randomBytes } from 'ethers'
 import * as Sdk from '@1inch/cross-chain-sdk'
 import { uint8ArrayToHex, UINT_40_MAX } from '@1inch/byte-utils'
 import { createHash } from 'crypto'
-import { 
-  MsgExecuteContractCompat,
-  PrivateKey,
-  MsgBroadcasterWithPk,
-} from '@injectivelabs/sdk-ts'
-import { Network } from '@injectivelabs/networks'
-import { ChainId } from '@injectivelabs/ts-types'
-import { Interface, Signature } from 'ethers'
 import { Resolver } from './resolver'
-
+import { parseUnits, parseEther, MaxUint256 } from 'ethers'
 import factoryContract from "./TestEscrowFactory.json"
-import resolverContract from "./Resolver.json"
-// Resolver contract ABI (minimal interface needed)
-const RESOLVER_ABI = [
-  'function deploySrc(bytes calldata srcImmutables, bytes calldata order, bytes32 r, bytes32 vs, uint256 amount, uint256 trait, bytes calldata args) external payable',
-  'function withdraw(address escrow, bytes32 secret, bytes calldata immutables) external'
-]
+import resolverContractAbi from "./Resolver.json"
+import {EscrowFactory} from './escrow-factory'
+
+const coder = AbiCoder.defaultAbiCoder()
+const { Address } = Sdk
+
 
 export interface SwapParams {
   fromAmount: string
@@ -45,8 +37,7 @@ export interface SwapResponse {
   withdrawTx?: string
 }
 
-const RESOLVERR = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
-const ESCROW_FACTORYY = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+
 
 // Configuration matching the test spec exactly
 export const SWAP_CONFIG = {
@@ -69,6 +60,7 @@ export const SWAP_CONFIG = {
 // Resolver private key from test
 const resolverMnemonic = "soda giggle lobster frown sponsor bridge follow firm fashion buddy final this crawl junior burst race differ school pupil bleak above economy toy chunk"
 const resolverPk = '0x0a8453b8a66dc0e4cf0afcea4b961b6bcd4bd2d4d378c7512f8eb3a7aea255b3'
+const ownerPrivateKey = '0x3897c33f920e4594c9321f78208b8cf1646f45fd807a78ef0985cc607eea4f51'
 
 /**
  * Complete cross-chain swap implementation matching the test spec exactly
@@ -90,7 +82,6 @@ async function getOrDeployContracts(provider: ethers.JsonRpcProvider) {
   console.log('🚀 Deploying contracts dynamically (like test)...')
   console.log('Deploying EscrowFactory...')
 
-  const ownerPrivateKey = '0x8bc5e2d9a1ec77c51fd83dc78622222c8b2f1eadaa361eae31409a702ec21c27' // from test config
   const deployer = new ethers.Wallet(ownerPrivateKey, provider)
 
   const escrowFactory = await deploy(
@@ -110,56 +101,21 @@ async function getOrDeployContracts(provider: ethers.JsonRpcProvider) {
 
   
     const resolver = await deploy(
-      resolverContract,
-      [
-          escrowFactory,
-          SWAP_CONFIG.source.limitOrderProtocol,
-          ethers.computeAddress(resolverPk) // resolver as owner of contract
-      ],
-      provider,
-      deployer
-    )
+    resolverContractAbi,
+    [
+        escrowFactory,
+        SWAP_CONFIG.source.limitOrderProtocol,
+        ethers.computeAddress(resolverPk) // resolver as owner of contract
+    ],
+    provider,
+    deployer
+  )
     console.log(`[${SWAP_CONFIG.source.chainId}]`, `Resolver contract deployed to`, resolver)
 
       
-  // const escrowFactoryFactory = new ethers.ContractFactory(
-  //   factoryContract.abi, 
-  //   factoryContract.bytecode, 
-  //   deployer
-  // )
 
 
-  /*
-  const escrowFactoryContract = await escrowFactoryFactory.deploy(
-    SWAP_CONFIG.source.limitOrderProtocol,     // limitOrderProtocol
-    '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // wrappedNative (WETH)
-    ethers.ZeroAddress,                        // accessToken
-    deployer.address,                          // owner
-    60 * 30,                                   // src rescue delay
-    60 * 30                                    // dst rescue delay
-  )
-  await escrowFactoryContract.waitForDeployment()
-  const escrowFactory = await escrowFactoryContract.getAddress()
-  console.log('✅ EscrowFactory deployed to:', escrowFactory)
-
-  // Deploy Resolver (exactly like test)
-  console.log('Deploying Resolver...')
-  const resolverFactory = new ethers.ContractFactory(
-    resolverContract.abi, 
-    resolverContract.bytecode, 
-    deployer
-  )
-  
-  const resolverContractInstance = await resolverFactory.deploy(
-    escrowFactory,                             // escrowFactory
-    SWAP_CONFIG.source.limitOrderProtocol,     // limitOrderProtocol
-    ethers.computeAddress(resolverPk)          // owner (resolver address)
-  )
-  await resolverContractInstance.waitForDeployment()
-  const resolver = await resolverContractInstance.getAddress()
-  console.log('✅ Resolver deployed to:', resolver)
-*/
-  return { escrowFactoryCont: escrowFactory, resolverCont: resolver }
+  return { escrowFactory,  resolver }
 }
 export async function executeCrossChainSwap(
   fromAmount: string,
@@ -167,48 +123,85 @@ export async function executeCrossChainSwap(
   injectiveAddress: string
 ): Promise<any> {
 
-  const { Address } = Sdk
+  console.log('🚀 STARTING COMPLETE CROSS-CHAIN SWAP')
+  console.log('userAddress', userAddress)
 
-  const Rprovider = new ethers.JsonRpcProvider(SWAP_CONFIG.source.rpcUrl, SWAP_CONFIG.source.chainId)
-  const { escrowFactoryCont, resolverCont } = await getOrDeployContracts(Rprovider)
+
+  const Rprovider = new ethers.JsonRpcProvider(SWAP_CONFIG.source.rpcUrl, SWAP_CONFIG.source.chainId, {
+                cacheTimeout: -1,
+                staticNetwork: true
+    })
+        
+  
+  const { escrowFactory, resolver } = await getOrDeployContracts(Rprovider)
+
+  const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider)
+  const signer = await provider.getSigner()
+    
+
+  const ResolverWallet = new ethers.Wallet(resolverPk, Rprovider);
+
+  const srcFactory = new EscrowFactory(Rprovider, escrowFactory);
+
+  
+  // Check current user USDC balance
+  const usdcContract = new ethers.Contract(SWAP_CONFIG.source.tokens.USDC, [
+    'function balanceOf(address) view returns (uint256)',
+    'function allowance(address owner, address spender) view returns (uint256)',
+    'function approve(address spender, uint256 amount) returns (bool)'
+  ], signer)
+  
+
+
+  const approveToken = await signer.sendTransaction({
+            to: SWAP_CONFIG.source.tokens.USDC,
+            data: '0x095ea7b3' + coder.encode(['address', 'uint256'], [SWAP_CONFIG.source.limitOrderProtocol, MaxUint256]).slice(2)
+    })
+
+  await approveToken.wait()
+  console.log('✅ USDC approved for limit order protocol')
+
+
+  const srcResolverContract = new ethers.Contract(
+    resolver,
+    resolverContractAbi.abi,
+    ResolverWallet
+)
+
 
 
   // Step 1: Generate swap parameters (matching test spec exactly)
   const swapId = `swap-${Date.now()}`
-  const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-  const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex'))
-  const secret = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
-  const srcTimestamp = BigInt(Math.floor(Date.now() / 1000))
+  
+   const secret = uint8ArrayToHex(randomBytes(32)) 
 
   console.log('🔧 TEST SETUP:')
-  console.log('Swap ID:', swapId)
-  console.log('Secret bytes (raw):', secretBytes)
-  console.log('Secret bytes (hex with 0x):', secretBytesX)
+
   console.log('Secret hash:', secret)
-  console.log('User address:', userAddress)
+  const srcTimestamp = BigInt((await Rprovider.getBlock('latest'))!.timestamp)
 
   // Step 2: Create cross-chain order using 1inch SDK (exactly like test)
   const order = Sdk.CrossChainOrder.new(
-    new Address(escrowFactoryCont),
+    new Address(escrowFactory),
     {
-      salt: Sdk.randBigInt(1000),
+      salt: Sdk.randBigInt(BigInt(1000)),
       maker: new Address(userAddress),
-      makingAmount: ethers.parseUnits(fromAmount, 6),
-      takingAmount: ethers.parseUnits(fromAmount, 6),
-      makerAsset: new Address(SWAP_CONFIG.source.tokens.USDC),
-      takerAsset: new Address(SWAP_CONFIG.source.tokens.USDC)
+      makingAmount: ethers.parseUnits('1', 6),
+      takingAmount: ethers.parseUnits('1', 6),
+      makerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"), // USDC
+      takerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") // USDC
     },
     {
-      hashLock: Sdk.HashLock.forSingleFill(secretBytesX),
+      hashLock: Sdk.HashLock.forSingleFill(secret),
       timeLocks: Sdk.TimeLocks.new({
-        srcWithdrawal: BigInt(10), // 10sec finality lock for test
-        srcPublicWithdrawal: BigInt(120), // 2m for private withdrawal 
-        srcCancellation: BigInt(121), // 1sec public withdrawal
-        srcPublicCancellation: BigInt(122), // 1sec private cancellation
-        dstWithdrawal: BigInt(10), // 10sec finality lock for test
-        dstPublicWithdrawal: BigInt(100), // 100sec private withdrawal
-        dstCancellation: BigInt(101) // 1sec public withdrawal
-      }),
+            srcWithdrawal: BigInt(10), // 10sec finality lock for test
+            srcPublicWithdrawal: BigInt(120), // 2m for private withdrawal
+            srcCancellation: BigInt(121), // 1sec public withdrawal
+            srcPublicCancellation: BigInt(122), // 1sec private cancellation
+            dstWithdrawal: BigInt(10), // 10sec finality lock for test
+            dstPublicWithdrawal: BigInt(100), // 100sec private withdrawal
+            dstCancellation: BigInt(101) // 1sec public withdrawal
+       }),
       srcChainId: Sdk.NetworkEnum.ETHEREUM,
       dstChainId: Sdk.NetworkEnum.COINBASE, // temporary, should add aptos to supported chains
       srcSafetyDeposit: ethers.parseEther('0.001'),
@@ -223,7 +216,7 @@ export async function executeCrossChainSwap(
       }),
       whitelist: [
         {
-          address: new Address(resolverCont),
+          address: new Address(resolver),
           allowFrom: BigInt(0)
         }
       ],
@@ -236,21 +229,16 @@ export async function executeCrossChainSwap(
     }
   )
 
-  console.log('📋 ORDER CREATED:')
-  console.log('Order salt:', order.salt.toString())
-  console.log('Order maker:', order.maker.toString())
-  console.log('Order making amount:', order.makingAmount.toString())
-  console.log('Order taking amount:', order.takingAmount.toString())
-  console.log('Order maker asset:', order.makerAsset.toString())
-  console.log('Order taker asset:', order.takerAsset.toString())
-  console.log('Src safety deposit:', order.escrowExtension.srcSafetyDeposit.toString())
   
+
+  console.log('📋 ORDER CREATED:')
+  console.log('order', order)
+
+        
   // Step 3: Sign the order (user signs with MetaMask)
   const realChainId = SWAP_CONFIG.source.chainId // 27270
   const typedData = order.getTypedData(realChainId)
 
-  const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider)
-  const signer = await provider.getSigner()
 
   const signature = await signer.signTypedData(
     typedData.domain,
@@ -260,342 +248,217 @@ export async function executeCrossChainSwap(
   // Create the order hash for signing
   const orderHash = order.getOrderHash(SWAP_CONFIG.source.chainId)
   
-  console.log('🔍 DEBUG - orderHash type:', typeof orderHash)
-  console.log('🔍 DEBUG - orderHash value:', orderHash)
-  console.log('🔍 DEBUG - orderHash constructor:', orderHash?.constructor?.name)
-
-  // Then modify line 155 to handle the case where orderHash might be an object
- 
 
   console.log('✍️ ORDER SIGNED:')
   console.log('Signature:', signature)
   console.log('Order hash:', orderHash)
-  
+  const DST_RESOLVER = "inj1rfhgjga07nkn5kmw7macwathepxew3rfndtw45"
+  const resolverContract = new Resolver(resolver, DST_RESOLVER)
+
   const fillAmount = order.makingAmount
-
-  console.log('💰 FILL PARAMETERS:')
-  console.log('Fill amount:', fillAmount.toString())
-  console.log('Resolver contract src address:', resolverCont)
-
-  // Step 4: Deploy source escrow - encode the arrays as bytes first
-  console.log('🚀 DEPLOY SRC PARAMETERS:')
-  const takerTraits = Sdk.TakerTraits.default()
-  .setExtension(order.extension)
-  .setAmountMode(Sdk.AmountMode.maker)
-  .setAmountThreshold(order.takingAmount)
-
-const {args, trait} = takerTraits.encode()
-const {r, yParityAndS: vs} = Signature.from(signature)
-const immutables = order.toSrcImmutables(
-  SWAP_CONFIG.source.chainId, 
-  new Sdk.Address(resolverCont), 
-  fillAmount, 
-  order.escrowExtension.hashLockInfo
-)
-
-// Convert SDK objects to array format (like working code)
-const orderObj = order.build()
-const orderArray = [
-  orderObj.salt,
-  orderObj.maker,
-  orderObj.receiver,
-  orderObj.makerAsset,
-  orderObj.takerAsset,
-  orderObj.makingAmount,
-  orderObj.takingAmount,
-  orderObj.makerTraits
-]
-
-const immutablesObj = immutables.build()
-const immutablesArray = [
-  immutablesObj.orderHash,
-  immutablesObj.hashlock,
-  immutablesObj.maker,
-  immutablesObj.taker,
-  immutablesObj.token,
-  immutablesObj.amount,
-  immutablesObj.safetyDeposit,
-  immutablesObj.timelocks
-]
+console.log('💰 FILL AMOUNT:', fillAmount.toString())
+console.log('Resolver contract address:', resolverContract)
 
 
 
-const resolverContract = new Resolver(resolverCont, resolverCont)
-console.log('Resolver contract:', resolverContract)
 
-const deployTxRequest = resolverContract.deploySrc(
-  SWAP_CONFIG.source.chainId,
-  order,
-  signature,
-  takerTraits,
-  fillAmount
-)
+
+const tx = resolverContract.deploySrc(
+                    SWAP_CONFIG.source.chainId,
+                    order,
+                    signature,
+                    Sdk.TakerTraits.default()
+                        .setExtension(order.extension)
+                        .setAmountMode(Sdk.AmountMode.maker)
+                        .setAmountThreshold(order.takingAmount),
+                    fillAmount
+                )
+
+const Ftx = {
+            ...tx,
+            gasLimit: 10_000_000,
+            
+        }
+
 console.log('📤 DEPLOY TX REQUEST:')
-console.log('To:', deployTxRequest.to)
-console.log('Value:', deployTxRequest.value?.toString())
-console.log('Data length:', deployTxRequest.data?.length)
+console.log('To:', Ftx.to)
+console.log('Value:', Ftx.value?.toString())
+console.log('Data:', Ftx.data)
+console.log('Data length:', Ftx.data?.length)
+console.log('Data is empty?', !Ftx.data || Ftx.data === '0x')
 
-const ResolverProvider = new ethers.JsonRpcProvider(SWAP_CONFIG.source.rpcUrl); // Replace with your Infura/Alchemy endpoint
-const ResolverWallet = new ethers.Wallet(resolverPk, ResolverProvider);
+ const res = await ResolverWallet.sendTransaction(
+   Ftx
+)
+
+ const receipt = await res.wait(1)
+ console.log('✅ Transaction sent successfully!', receipt)
+//   console.log('💰 FILL PARAMETERS:')
+//   console.log('Fill amount:', fillAmount.toString())
+//   console.log('Resolver contract src address:', resolver)
+
+//   // Step 4: Deploy source escrow - encode the arrays as bytes first
+//   console.log('🚀 DEPLOY SRC PARAMETERS:')
+//   const takerTraits = Sdk.TakerTraits.default()
+//   .setExtension(order.extension)
+//   .setAmountMode(Sdk.AmountMode.maker)
+//   .setAmountThreshold(order.takingAmount)
 
 
-const tx = {
-  ...deployTxRequest,
-  gasLimit: 10_000_000,
-  from: await ResolverWallet.getAddress()
+// console.log('Resolver contract:', resolverContract)
+
+// console.log('SWAP_CONFIG.source.chainId', SWAP_CONFIG.source.chainId)
+// console.log('order', order)
+// console.log('signature', signature)
+// console.log('takerTraits', takerTraits)
+// console.log('fillAmount', fillAmount)
+
+// const deployTxRequest = resolverContract.deploySrc(
+//   SWAP_CONFIG.source.chainId,
+//   order,
+//   signature,
+//   takerTraits,
+//   fillAmount
+// )
+
+// console.log('deployTxRequest', deployTxRequest)
+// console.log('📤 DEPLOY TX REQUEST:')
+// console.log('To:', deployTxRequest.to)
+// console.log('Value:', deployTxRequest.value?.toString())
+// console.log('Data:', deployTxRequest.data)
+// console.log('Data length:', deployTxRequest.data?.length)
+// console.log('Data is empty?', !deployTxRequest.data || deployTxRequest.data === '0x')
+
+// // ✅ CRITICAL FIX: Use the deployTxRequest directly instead of reformatting
+// console.log('🔧 DEPLOY TX REQUEST (direct from Resolver):')
+// console.log('deployTxRequest:', deployTxRequest)
+// console.log('To:', deployTxRequest.to)
+// console.log('Data:', deployTxRequest.data)
+// console.log('Data length:', deployTxRequest.data?.length)
+// console.log('Value:', deployTxRequest.value?.toString())
+
+// // Check if data is missing and throw error
+// if (!deployTxRequest.data || deployTxRequest.data === '0x' || deployTxRequest.data === '') {
+//   throw new Error('❌ CRITICAL: deployTxRequest.data is empty! This will cause transaction to fail.')
+// }
+
+// console.log('tx', deployTxRequest)
+
+// // ✅ BROWSER FIX: Explicitly serialize for browser compatibility
+// console.log('🔄 BROWSER FIX: Serializing transaction for browser...')
+
+// const browserTx = {
+//   to: deployTxRequest.to,
+//   data: deployTxRequest.data,
+//   value: deployTxRequest.value?.toString(), // Convert BigInt to string for browser
+//   gasLimit: 10_000_000 // Add explicit gas limit
+// }
+
+// console.log('� BROWSER TX (serialized):')
+// console.log('To:', browserTx.to)
+// console.log('Data:', browserTx.data)
+// console.log('Data length:', browserTx.data?.length)
+// console.log('Value (string):', browserTx.value)
+// console.log('Gas limit:', browserTx.gasLimit)
+
+
+// let srcTx: any
+// let srcReceipt: any
+
+// // ⚠️ IMPORTANT: In the real world, this would be called by the resolver backend, not the user frontend
+// // For demo purposes, we're simulating the resolver's action by using the resolver wallet
+// console.log('🔄 RESOLVER ACTION: Deploying source escrow (this should normally be done by resolver backend)...')
+
+// console.log('🔍 PRE-SEND DEBUG:')
+// console.log('ResolverWallet address:', ResolverWallet.address)
+// console.log('Transaction to:', deployTxRequest.to)
+// console.log('Transaction data length:', deployTxRequest.data?.length)
+// console.log('Transaction value:', deployTxRequest.value?.toString())
+
+// // ...existing code...
+
+// console.log('🔍 CONTRACT ADDRESS DEBUG:')
+// console.log('Deployed resolver address:', resolver)
+// console.log('Transaction target address:', deployTxRequest.to)
+// console.log('Addresses match:', resolver === deployTxRequest.to)
+
+// // ...existing code...
+// // ✅ CRITICAL FIX: Check contract owner and verify it matches resolver wallet
+// try {
+//   console.log('🚀 SENDING TRANSACTION...')
+  
+//   // Debug: Check contract owner
+//   const resolverContract = new ethers.Contract(resolver, resolverContractAbi.abi, ResolverProvider)
+//   const contractOwner = await resolverContract.owner()
+//   console.log('🔍 OWNERSHIP DEBUG:')
+//   console.log('Contract owner:', contractOwner)
+//   console.log('Resolver wallet address:', ResolverWallet.address)
+//   console.log('Expected resolver address:', ethers.computeAddress(resolverPk))
+//   console.log('Owner matches resolver wallet:', contractOwner.toLowerCase() === ResolverWallet.address.toLowerCase())
+  
+//   if (contractOwner.toLowerCase() !== ResolverWallet.address.toLowerCase()) {
+//     throw new Error(`❌ OWNERSHIP ERROR: Contract owner (${contractOwner}) does not match resolver wallet (${ResolverWallet.address})`)
+//   }
+  
+//   // Debug: Check function signature
+//   const expectedSelector = '0xca218276' // deploySrc function selector
+//   const actualSelector = deployTxRequest.data!.slice(0, 10)
+//   console.log('Function selector matches:', expectedSelector === actualSelector)
+  
+
+  
+//   // Send the transaction with proper gas settings
+//   const txRequest = {
+//     to: deployTxRequest.to,
+//     data: deployTxRequest.data,
+//     value: deployTxRequest.value,
+//     gasLimit: 2_000_000, // Increased gas limit for complex transaction
+//     type: 2 // EIP-1559 transaction
+//   }
+  
+//   console.log('Full transaction request:', txRequest)
+  
+//   // Try sending the transaction even if static call failed
+//   srcTx = await ResolverWallet.sendTransaction(txRequest)
+//   console.log('✅ TRANSACTION SENT SUCCESSFULLY!')
+// } catch (error: any) {
+//   console.error('❌ TRANSACTION FAILED:', error)
+  
+//   // Enhanced error debugging
+//   console.log('Error type:', error.constructor?.name)
+//   console.log('Error code:', error.code)
+//   console.log('Error reason:', error.reason)
+  
+//   // Try to get more details about the revert
+//   try {
+//     if (deployTxRequest.to) {
+//       const code = await ResolverProvider.getCode(deployTxRequest.to)
+//       console.log('Contract code exists:', code !== '0x')
+//       console.log('Contract code length:', code.length)
+//     } else {
+//       console.log('No target address in deployTxRequest')
+//     }
+//   } catch (e) {
+//     console.log('Could not check contract code:', e)
+//   }
+  
+//   throw error
+// }
+// srcReceipt = await srcTx.wait(1)
+
+// console.log('✅ REAL deploySrc transaction confirmed!')
+// console.log('Transaction hash:', srcTx.hash)
+// console.log('Block hash:', srcReceipt?.blockHash)
+
+// console.log('Final transaction hash:', srcTx.hash)
+
+// Return the data needed for the API calls
+return {
+  message: 'Source escrow deployed successfully'
 }
 
-const srcTx = await ResolverWallet.sendTransaction(tx)
+// ...existing code...
 
-const srcReceipt = await srcTx.wait()
-console.log('Block hash:', srcReceipt)
-
-
-
-/*
-const srcTx = await ResolverWallet.sendTransaction(deployTxRequest)
-
-const srcReceipt = await srcTx.wait()
-console.log('Block hash:', srcReceipt)
-
-
-/*
-  // Create contract instance and call with encoded bytes
-  const resolverContract = new ethers.Contract(
-    RESOLVERR,
-    RESOLVER_ABI,
-    signer
-  )
-
-  console.log('🚀 CALLING DEPLOYSRC WITH ENCODED BYTES...')
-
-  const srcTx = await resolverContract.deploySrc(
-    immutablesEncoded,                  // encoded bytes
-    orderEncoded,                       // encoded bytes
-    r,                                  // signature r
-    vs,                                 // signature vs
-    fillAmount,                         // amount
-    trait,                              // trait as BigInt
-    args,                               // args as bytes
-    {
-      value: order.escrowExtension.srcSafetyDeposit,
-      gasLimit: 10_000_000
-    }
-  )
-    
-  console.log('✅ DEPLOY SRC RESULT:')
-  console.log(`Source escrow deployed in tx ${srcTx.hash}`)
-  
-  const srcReceipt = await srcTx.wait()
-  console.log('Block hash:', srcReceipt.blockHash)
-  */
-    // console.log('To:', deployTxRequest.to)
-    // console.log('Value:', deployTxRequest.value?.toString())
-    // console.log('Data length:', deployTxRequest.data?.length)
-/*
-  console.log('🚀 DEPLOY SRC PARAMETERS:')
-            const takerTraits = Sdk.TakerTraits.default()
-                .setExtension(order.extension)
-                .setAmountMode(Sdk.AmountMode.maker)
-                .setAmountThreshold(order.takingAmount)
-  
-  const takerTraits = Sdk.TakerTraits.default()
-    .setExtension(order.extension)
-    .setAmountMode(Sdk.AmountMode.maker)
-    .setAmountThreshold(order.takingAmount)
-  
-  const {args, trait} = takerTraits.encode()
-  console.log('Taker traits value:', trait.toString())
-  console.log('Taker traits args:', args)
-  console.log('Chain ID:', SWAP_CONFIG.source.chainId)
-  console.log('Order extension:', order.extension)
-  console.log('Amount mode:', Sdk.AmountMode.maker)
-  console.log('Amount threshold:', order.takingAmount.toString())
-
-  // Create resolver transaction request (matching test resolver.deploySrc)
-  const {r, yParityAndS: vs} = Signature.from(signature)
-  const immutables = order.toSrcImmutables(
-    SWAP_CONFIG.source.chainId, 
-    new Address(RESOLVERR), 
-    fillAmount, 
-    order.escrowExtension.hashLockInfo
-  )
-
-  const resolverInterface = new Interface(RESOLVER_ABI)
-  const deployTxRequest = {
-    to: RESOLVERR,
-    data: resolverInterface.encodeFunctionData('deploySrc', [
-      immutables.build(),
-      order.build(),
-      r,
-      vs,
-      fillAmount,
-      trait,
-      args
-    ]),
-    value: order.escrowExtension.srcSafetyDeposit
-  }
-
-  console.log('📤 DEPLOY TX REQUEST:')
-  console.log('To:', deployTxRequest.to)
-  console.log('Value:', deployTxRequest.value?.toString())
-  console.log('Data length:', deployTxRequest.data?.length)
-
-  const srcTx = await signer.sendTransaction(deployTxRequest)
-  const srcReceipt = await srcTx.wait()
-
-  console.log('✅ DEPLOY SRC RESULT:')
-  console.log(`Source escrow deployed in tx ${srcTx.hash}`)
-  console.log('Block hash:', srcReceipt?.blockHash)
-  /*
-  // Step 5: Fund destination escrow on Injective (like test Step 3)
-  console.log(`Funding Injective atomic swap contract`)
-  
-  console.log('💰 INJECTIVE FUNDING PARAMETERS:')
-  console.log('Secret bytes (raw):', secretBytes)
-  console.log('Fill amount:', fillAmount.toString())
-  console.log('Recipient address:', injectiveAddress)
-  console.log('Expiry height:', 90_000_000)
-  console.log('Swap ID:', swapId)
-
-  const resolverWallet = PrivateKey.fromMnemonic(resolverMnemonic)
-  const resolverAddress = resolverWallet.toAddress().toBech32()
-
-  const broadcaster = new MsgBroadcasterWithPk({
-    network: Network.Testnet,
-    chainId: ChainId.Testnet,
-    privateKey: resolverWallet,
-    endpoints: {
-      grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
-      rest: 'https://testnet.sentry.lcd.injective.network',
-      indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
-    },
-  })
-
-  const hash = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
-  const executeMsg = {
-    create: {
-      id: swapId,
-      hash,
-      recipient: injectiveAddress,
-      expires: {
-        at_height: 90_000_000,
-      },
-    },
-  }
-
-  const msg = MsgExecuteContractCompat.fromJSON({
-    sender: resolverAddress,
-    contractAddress: SWAP_CONFIG.destination.contractAddress,
-    msg: executeMsg,
-    funds: [
-      {
-        amount: fillAmount.toString(), // native INJ amount
-        denom: 'inj',
-      },
-    ],
-  })
-
-  const dstTx = await broadcaster.broadcast({ msgs: msg })
-  await new Promise(resolve => setTimeout(resolve, 2000))
-
-  console.log('✅ Destination escrow funded on Injective')
-  console.log('Tx Hash:', dstTx.txHash)
-
-  // Step 6: Wait for finality lock to pass (like test Step 4)
-  console.log('⏰ WAITING FOR FINALITY LOCK:')
-  console.log('Waiting 11 seconds for finality lock...')
-  await new Promise(resolve => setTimeout(resolve, 11000))
-  console.log('✅ Time passed, finality lock should be cleared')
-
-  // Step 7: User claims funds on Injective (like test Step 5)
-  console.log(`User claiming funds on Injective`)
-
-  console.log('🔓 INJECTIVE CLAIM PARAMETERS:')
-  console.log('Swap ID:', swapId)
-  console.log('Secret bytes (raw for preimage):', secretBytes)
-  console.log('Recipient address:', injectiveAddress)
-
-  const claimMsg = {
-    release: {
-      id: swapId,
-      preimage: secretBytes,
-      recipient: injectiveAddress,
-    },
-  }
-
-  const claimExecuteMsg = MsgExecuteContractCompat.fromJSON({
-    sender: resolverAddress, // Resolver claims for user
-    contractAddress: SWAP_CONFIG.destination.contractAddress,
-    msg: claimMsg,
-    funds: [],
-  })
-
-  const claimTx = await broadcaster.broadcast({ msgs: [claimExecuteMsg] })
-
-  console.log('✅ Native INJ successfully claimed!')
-  console.log('Tx Hash:', claimTx.txHash)
-
-  // Step 8: Resolver withdraws from EVM source escrow (like test Step 6)
-  console.log('🏦 WITHDRAWAL SETUP:')
-
-  // Calculate escrow address (simplified - in real implementation would get from factory)
-  const srcEscrowAddress = new Sdk.EscrowFactory(new Address(SWAP_CONFIG.source.escrowFactory)).getSrcEscrowAddress(
-    immutables,
-    new Address("0x") // ESCROW_SRC_IMPLEMENTATION - would need to get from factory
-  )
-
-  console.log('Calculated src escrow address:', srcEscrowAddress.toString())
-  console.log('Escrow factory address:', SWAP_CONFIG.source.escrowFactory)
-
-  console.log(`Resolver withdrawing from source escrow ${srcEscrowAddress}`)
-
-  console.log('💸 WITHDRAWAL PARAMETERS:')
-  console.log('Withdrawal side:', 'src')
-  console.log('Escrow address:', srcEscrowAddress.toString())
-  console.log('Secret (with 0x prefix):', secretBytesX)
-  console.log('Immutables:', immutables)
-
-  const withdrawTxRequest = {
-    to: RESOLVERR,
-    data: resolverInterface.encodeFunctionData('withdraw', [
-      srcEscrowAddress.toString(), 
-      secretBytesX, 
-      immutables.build()
-    ])
-  }
-
-  console.log('📤 WITHDRAW TX REQUEST:')
-  console.log('To:', withdrawTxRequest.to)
-  console.log('Data length:', withdrawTxRequest.data?.length)
-
-  const withdrawTx = await signer.sendTransaction(withdrawTxRequest)
-  const withdrawReceipt = await withdrawTx.wait()
-
-  console.log('✅ WITHDRAWAL RESULT:')
-  console.log(`Resolver withdrawn funds in tx ${withdrawTx.hash}`)
-
-  return {
-    success: true,
-    swapId,
-    orderHash,
-    secretBytes,
-    order,
-    signature,
-    injectiveContract: SWAP_CONFIG.destination.contractAddress,
-    injAmount: ethers.formatUnits(fillAmount, 18),
-    exchangeRate: 1000,
-    message: 'Cross-chain swap completed successfully!',
-    srcEscrowTx: srcTx.hash,
-    dstFundingTx: dstTx.txHash,
-    claimTx: claimTx.txHash,
-    withdrawTx: withdrawTx.hash
-  }
-    */
-   return {
-    
-    message: 'Swap Executed'
-   }
 }
 
 /**
@@ -682,4 +545,4 @@ declare global {
       getKey: (chainId: string) => Promise<any>;
     };
   }
-}
+} 

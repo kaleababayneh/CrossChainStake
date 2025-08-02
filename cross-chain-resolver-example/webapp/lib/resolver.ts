@@ -1,14 +1,10 @@
-import { Interface, Signature, TransactionRequest } from 'ethers'
+import {Interface, Signature, TransactionRequest} from 'ethers'
 import * as Sdk from '@1inch/cross-chain-sdk'
-import { AbiCoder } from '@ethersproject/abi'
+import Contract from './Resolver.json'
 
-const RESOLVER_ABI = [
-    'function deploySrc(bytes calldata srcImmutables, bytes calldata order, bytes32 r, bytes32 vs, uint256 amount, uint256 trait, bytes calldata args) external payable',
-    'function withdraw(address escrow, bytes32 secret, bytes calldata immutables) external'
-]
-
+const {Address} = Sdk
 export class Resolver {
-    private readonly iface = new Interface(RESOLVER_ABI)
+    private readonly iface = new Interface(Contract.abi)
 
     constructor(
         public readonly srcAddress: string,
@@ -23,60 +19,59 @@ export class Resolver {
         amount: bigint,
         hashLock = order.escrowExtension.hashLockInfo
     ): TransactionRequest {
+        console.log('🔧 RESOLVER DEBUG - deploySrc called')
+        console.log('- chainId:', chainId)
+        console.log('- order:', order)
+        console.log('- signature:', signature)
+        console.log('- amount:', amount)
+        console.log('- hashLock:', hashLock)
+
         const {r, yParityAndS: vs} = Signature.from(signature)
         const {args, trait} = takerTraits.encode()
         const immutables = order.toSrcImmutables(chainId, new Sdk.Address(this.srcAddress), amount, hashLock)
 
-        // Convert SDK objects to array format (like working code)
-        const orderObj = order.build()
-        const orderArray = [
-            orderObj.salt,
-            orderObj.maker,
-            orderObj.receiver,
-            orderObj.makerAsset,
-            orderObj.takerAsset,
-            orderObj.makingAmount,
-            orderObj.takingAmount,
-            orderObj.makerTraits
-        ]
+        console.log('🔧 RESOLVER DEBUG - deploySrc parameters:')
+        console.log('- immutables.build():', immutables.build())
+        console.log('- order.build():', order.build())
+        console.log('- r:', r)
+        console.log('- vs:', vs)
+        console.log('- amount:', amount)
+        console.log('- trait:', trait)
+        console.log('- args:', args)
 
-        const immutablesObj = immutables.build()
-        const immutablesArray = [
-            immutablesObj.orderHash,
-            immutablesObj.hashlock,
-            immutablesObj.maker,
-            immutablesObj.taker,
-            immutablesObj.token,
-            immutablesObj.amount,
-            immutablesObj.safetyDeposit,
-            immutablesObj.timelocks
-        ]
-        // 🔥 KEY FIX: Encode the arrays as bytes using ABI encoder
-        const abiCoder = new AbiCoder()
+        const encoded = this.iface.encodeFunctionData('deploySrc', [
+            immutables.build(),
+            order.build(),
+            r,
+            vs,
+            amount,
+            trait,
+            args
+        ])
 
-        // Define the struct types for encoding
-        const immutablesEncoded = abiCoder.encode(
-            ['tuple(bytes32,bytes32,address,address,address,uint256,uint256,uint256)'],
-            [immutablesArray]
-        )
-
-        const orderEncoded = abiCoder.encode(
-            ['tuple(uint256,address,address,address,address,uint256,uint256,uint256)'],
-            [orderArray]
-        )
+        console.log('🔧 RESOLVER DEBUG - encoded data:', encoded)
+        console.log('🔧 RESOLVER DEBUG - encoded data length:', encoded.length)
 
         return {
             to: this.srcAddress,
-            data: this.iface.encodeFunctionData('deploySrc', [
-                immutablesEncoded,                  // encoded bytes
-                orderEncoded,                       // encoded bytes
-                r,                                  // signature r
-                vs,                                 // signature vs
-                amount,                         // amount
-                trait,                              // trait as BigInt
-                args,                               // args as bytes
-            ]),
+            data: encoded,
             value: order.escrowExtension.srcSafetyDeposit
+        }
+    }
+
+    public deployDst(
+        /**
+         * Immutables from SrcEscrowCreated event with complement applied
+         */
+        immutables: Sdk.Immutables
+    ): TransactionRequest {
+        return {
+            to: this.dstAddress,
+            data: this.iface.encodeFunctionData('deployDst', [
+                immutables.build(),
+                immutables.timeLocks.toSrcTimeLocks().privateCancellation
+            ]),
+            value: immutables.safetyDeposit
         }
     }
 
@@ -90,6 +85,13 @@ export class Resolver {
         return {
             to: side === 'src' ? this.srcAddress : this.dstAddress,
             data: encoding
+        }
+    }
+
+    public cancel(side: 'src' | 'dst', escrow: Sdk.Address, immutables: Sdk.Immutables): TransactionRequest {
+        return {
+            to: side === 'src' ? this.srcAddress : this.dstAddress,
+            data: this.iface.encodeFunctionData('cancel', [escrow.toString(), immutables.build()])
         }
     }
 }
