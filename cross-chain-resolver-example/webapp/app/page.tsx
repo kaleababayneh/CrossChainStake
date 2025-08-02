@@ -257,7 +257,8 @@ export default function TokenSwap() {
       const result = await executeCrossChainSwap(
         fromAmount,
         metamaskWallet.fullAddress,
-        keplrWallet.fullAddress
+        keplrWallet.fullAddress,
+        true,
       )
 
       console.log('🎉 CROSS-CHAIN SWAP COMPLETED!')

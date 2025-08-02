@@ -15,24 +15,26 @@ import { ChainId} from '@injectivelabs/ts-types';
 dotenv.config()
 
 
-// Using a mnemonic phrase
-const mnemonic = process.env.MNEMONIC as string 
-const mnemonic2 = process.env.MNEMONIC2 as string
 
-const wallet = PrivateKey.fromMnemonic(mnemonic)
-const address = wallet.toAddress().toBech32()
+// const mnemonic = process.env.MNEMONIC as string 
+// const mnemonic2 = process.env.MNEMONIC2 as string
+
+// const wallet = PrivateKey.fromMnemonic(mnemonic)
+// const address = wallet.toAddress().toBech32()
 
 
 const codeId = 33343 // e.g. "33340"
 const contractLabel = 'CW20 Atomic Swap'
 const gas = { gas: 2_000_000, gasPrice: 500_000_000 } // adjust if needed
-const recipientAddress = process.env.RECIPIENT        // e.g. 'inj1...'
-const contractAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS as string 
+//const recipientAddress = process.env.RECIPIENT        // e.g. 'inj1...'
+const contractAddress = "inj1rxrklxvejj93j7zqfpsd8a3c8n2xf4nakuwc6w"
 
-const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
+//const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+//const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
 
 export async function initializeSwapLedger() {
+  const wallet = PrivateKey.fromMnemonic(process.env.MNEMONIC as string)
+  const address = wallet.toAddress().toBech32()
   const instantiateMsg = {} // Your instantiateMsg is empty
 
   const msg = MsgInstantiateContract.fromJSON({
@@ -63,9 +65,13 @@ export async function initializeSwapLedger() {
 }
 
 export async function anounce_order() {
+  const wallet = PrivateKey.fromMnemonic(process.env.MNEMONIC as string)
+  const address = wallet.toAddress().toBech32()
+  console.log('🔧 RESOLVER DEBUG - announce_order called')
+  console.log('- address:', address)
+  console.log('- contractAddress:', contractAddress)
     const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
     const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
-    console.log(`🔐 Announcing order from ${address}`)
   
     const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,
@@ -89,7 +95,7 @@ export async function anounce_order() {
       create: {
         id: swapId,
         hash,
-        recipient: recipientAddress,
+        recipient: address, // This is the address that will receive the funds when the swap is claimed
         expires: {
           at_height: expiresAtHeight
         }
@@ -126,12 +132,19 @@ export async function fund_dst_escrow_with_params(
   recipient: string, 
   expiresAtHeight: number,
   swapId: string,
-  privateMnemonic: string = mnemonic
+  privateMnemonic: string 
 ) {
-  console.log(`💰 Funding dst escrow with ${amount} CUSDC from ${address}`)
 
   const wallet = PrivateKey.fromMnemonic(privateMnemonic)
-
+  const address = wallet.toAddress().toBech32()
+  console.log('🔧 RESOLVER DEBUG - fund_dst_escrow_with_params called')
+  console.log('- address:', address)
+  console.log('- contractAddress:', contractAddress)
+  console.log('- hash:', hash)
+  console.log('- amount:', amount)
+  console.log('- recipient:', recipient)
+  console.log('- expiresAtHeight:', expiresAtHeight)
+  console.log('- swapId:', swapId)
   const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,
       chainId: ChainId.Testnet,
@@ -143,6 +156,15 @@ export async function fund_dst_escrow_with_params(
       },
   })
 
+  console.log('🔧 RESOLVER DEBUG - fund_dst_escrow_with_params called')
+  console.log('- address:', address)
+  console.log('- contractAddress:', contractAddress)
+  console.log('- hash:', hash)
+  console.log('- amount:', amount)
+  console.log('- recipient:', recipient)
+  console.log('- expiresAtHeight:', expiresAtHeight)
+  console.log('- swapId:', swapId)
+
   const executeMsg = {
     create: {
       id: swapId,
@@ -153,6 +175,10 @@ export async function fund_dst_escrow_with_params(
       },
     },
   }
+
+  console.log('🔧 RESOLVER DEBUG - executeMsg:', executeMsg)
+  console.log('🔧 RESOLVER DEBUG - amount:', amount)
+
 
   const msg = MsgExecuteContractCompat.fromJSON({
     sender: address,
@@ -166,6 +192,9 @@ export async function fund_dst_escrow_with_params(
     ],
   })
 
+  console.log('🔧 RESOLVER DEBUG - msg:', msg)
+  console.log('🔧 RESOLVER DEBUG - msg length:', JSON.stringify(msg))
+
 
   const tx = await broadcaster.broadcast({ msgs: msg })
 
@@ -177,48 +206,20 @@ export async function fund_dst_escrow_with_params(
   console.log('Swap ID:', swapId)
   
   return { swapId, txHash: tx.txHash }
-}
+} 
 
-export async function claim_funds_with_params(swapId: string, preimage: string, recipient: string) {
-  console.log(`🔓 Claiming CUSDC from swap "${swapId}" from ${address}`)
-  
-  const broadcaster = new MsgBroadcasterWithPk({
-      network: Network.Testnet,
-      chainId: ChainId.Testnet,
-      privateKey: wallet,
-      endpoints: {
-          grpc: 'https://testnet.sentry.chain.grpc-web.injective.network',
-          rest: 'https://testnet.sentry.lcd.injective.network',
-          indexer: 'https://testnet.sentry.exchange.grpc-web.injective.network',
-      },
-  })
+export async function claim_funds_with_params_resolver(
+  swapId: string, 
+  preimage: string,
+  recipientAddress: string,
+  privateMnemonic: string,
+)
 
-  const executeMsg = {
-    release: {
-      id: swapId,
-      preimage,
-      recipient: recipientAddress,
-    },
-  }
+  {
 
-  const msg = MsgExecuteContractCompat.fromJSON({
-    sender: address,
-    contractAddress, // your escrow contract
-    msg: executeMsg,
-    funds: [], // nothing is sent; we're just unlocking the escrow
-  })
+  const wallet = PrivateKey.fromMnemonic(privateMnemonic)
+  const address = wallet.toAddress().toBech32()
 
-  const tx = await broadcaster.broadcast({ msgs: msg })
-
-  console.log('✅ Native INJ successfully claimed!')
-  console.log('Tx Hash:', tx.txHash)
-  
-  return tx.txHash
-}
-
-export async function claim_funds_with_params_resolver(swapId: string, preimage: string, recipient: string) {
-  console.log(`🔓 Resolver claiming CUSDC from swap "${swapId}" from ${address}`) 
-  
   const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,
       chainId: ChainId.Testnet,

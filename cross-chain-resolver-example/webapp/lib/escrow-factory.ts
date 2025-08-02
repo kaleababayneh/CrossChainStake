@@ -64,4 +64,42 @@ export class EscrowFactory {
             })
         ]
     }
+
+    public parseSrcDeployEventFromReceipt(receipt: any): [Sdk.Immutables, Sdk.DstImmutablesComplement] {
+    const event = this.iface.getEvent('SrcEscrowCreated')!
+    
+    // Find the log that matches our event
+    const eventLog = receipt.logs.find((log: any) => 
+        log.address.toLowerCase() === this.address.toLowerCase() && 
+        log.topics[0] === event.topicHash
+    )
+    
+    if (!eventLog) {
+        throw new Error('SrcEscrowCreated event not found in receipt')
+    }
+    
+    const [data] = [this.iface.decodeEventLog(event, eventLog.data, eventLog.topics)]
+    
+    const immutables = data.at(0)
+    const complement = data.at(1)
+
+    return [
+        Sdk.Immutables.new({
+            orderHash: immutables[0],
+            hashLock: Sdk.HashLock.fromString(immutables[1]),
+            maker: Sdk.Address.fromBigInt(immutables[2]),
+            taker: Sdk.Address.fromBigInt(immutables[3]),
+            token: Sdk.Address.fromBigInt(immutables[4]),
+            amount: immutables[5],
+            safetyDeposit: immutables[6],
+            timeLocks: Sdk.TimeLocks.fromBigInt(immutables[7])
+        }),
+        Sdk.DstImmutablesComplement.new({
+            maker: Sdk.Address.fromBigInt(complement[0]),
+            amount: complement[1],
+            token: Sdk.Address.fromBigInt(complement[2]),
+            safetyDeposit: complement[3]
+        })
+    ]
+}
 }

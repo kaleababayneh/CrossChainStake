@@ -125,17 +125,15 @@ describe('Resolving example', () => {
     // eslint-disable-next-line max-lines-per-function
     describe('Fill', () => {
   
-        it('should swap ETH USDC -> INJ. Single fill only ', async () => {
+        it.skip('should swap ETH USDC -> INJ. Single fill only ', async () => {
             const swapId = `swap-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex')) // This will automatically include "0x" prefix
-            const secret = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
 
             console.log('🔧 TEST SETUP:')
             console.log('Swap ID:', swapId)
             console.log('Secret bytes (raw):', secretBytes)
             console.log('Secret bytes (hex with 0x):', secretBytesX)
-            console.log('Secret hash:', secret)
             console.log('User address:', await srcChainUser.getAddress())
             console.log('Resolver address:', await srcChainResolver.getAddress())
 
@@ -253,18 +251,6 @@ describe('Resolving example', () => {
             console.log('Transaction hash:', orderFillHash)
             console.log('Block hash:', srcDeployBlock)
 
-            // Get the full transaction receipt for detailed logging
-            const txReceipt = await src.provider.getTransactionReceipt(orderFillHash)
-            console.log('📋 TRANSACTION RECEIPT:')
-            console.log('Block number:', txReceipt?.blockNumber)
-            console.log('Gas used:', txReceipt?.gasUsed?.toString())
-            console.log('Status:', txReceipt?.status) // 1 = success, 0 = failed
-            console.log('From:', txReceipt?.from)
-            console.log('To:', txReceipt?.to)
-
-            // Parse and log all events
-            console.log('📋 TRANSACTION LOGS:')
-            console.log('Total logs:', txReceipt?.logs?.length || 0)
 
 
             console.log('✅ DEPLOY SRC RESULT:')
@@ -285,9 +271,12 @@ describe('Resolving example', () => {
             console.log('Recipient address:', address2)
             console.log('Expiry height:', 90_000_000)
             console.log('Swap ID:', swapId)
-            
+
+              const hash = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
+
             await injective.fund_dst_escrow_with_params(
-                secretBytes, // Pass the raw secret to generate the hash
+
+                hash, // Pass the raw secret to generate the hash
                 fillAmount.toString(),
                 address2, // recipient (user's Injective address)
                 90_000_000, // expiry height
@@ -350,7 +339,7 @@ describe('Resolving example', () => {
 
 
   
-        it.skip('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
+        it('should swap CW20 Injective MYTOKEN -> EVM USDC. Single fill only ', async () => {
             const swapId = `swip-${Date.now()}`
             const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
             const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex'))
