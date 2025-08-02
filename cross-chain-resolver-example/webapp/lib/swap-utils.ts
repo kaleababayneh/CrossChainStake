@@ -372,7 +372,7 @@ console.log(`[] Resolver withdrawing from source escrow ${srcEscrowAddress}`)
 
 
    const withdrawTxRequest = resolverContract.withdraw('src', srcEscrowAddress, secretBytesX, srcEscrowEvent[0])
-            
+  //withdrawTxRequest.to = evmResolverPublicKey // Set the resolver contract as the recipient
   console.log('📤 WITHDRAW TX REQUEST:')
   console.log('To:', withdrawTxRequest.to)
   console.log('Data length:', withdrawTxRequest.data?.length)
@@ -419,8 +419,8 @@ else {
                 {
                     salt: Sdk.randBigInt(1000),
                     maker: new Address(evmResolverPublicKey), // User is maker
-                    makingAmount: parseUnits('1', 6), // 1 USDC  
-                    takingAmount: parseUnits('1', 6), // 1 CUSDC equivalent
+                    makingAmount: parseUnits('8', 6), // 1 USDC  
+                    takingAmount: parseUnits('8', 6), // 1 CUSDC equivalent
                     makerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"), // USDC
                     takerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") // USDC
                 },
@@ -478,6 +478,7 @@ else {
 
             console.log(`Order Hash: ${orderHash} | Resolver filling reverse order`)
 
+            
 const tx = resolverContract.deploySrc(
                     SWAP_CONFIG.source.chainId,
                     reverseOrder,
@@ -488,64 +489,85 @@ const tx = resolverContract.deploySrc(
                         .setAmountThreshold(reverseOrder.takingAmount),
                     reverseOrder.makingAmount
                 )
+   console.log('📤 DEPLOY TX REQUEST:', tx)
+                
 
-const Ftx = {
-            ...tx,
-            gasLimit: 10_000_000,
-            
-        }
-          const res = await ResolverWallet.sendTransaction(
-   Ftx
-)
+      const Ftx = {
+                    ...tx,
+                    gasLimit: 10_000_000,
+
+      }
+          const res = await ResolverWallet.sendTransaction(Ftx)
 
 
  const receipt = await res.wait(1)
 
- const srcDeployBlock = receipt?.blockHash as string
- const orderFillHash = receipt?.hash as string
+ console.log('📜 Transaction receipt:', receipt)
 
- console.log('✅ Transaction sent successfully!', receipt)
-  console.log(`Order ${orderHash} filled for ${reverseOrder.makingAmount} in tx ${orderFillHash}`)
+  const evmEscrowEvent = await srcFactory.parseSrcDeployEventFromReceipt(receipt)
 
-
-
-
-const srcEscrowEvent = srcFactory.parseSrcDeployEventFromReceipt(receipt)
-
-
-
-console.log('📋 SRC ESCROW EVENT:')
-console.log('Escrow event address:', srcEscrowEvent)
-console.log('Escrow event immutables:', srcEscrowEvent[0])
-
-
+  console.log('📋 EVM ESCROW EVENT:', evmEscrowEvent)
   await new Promise<void>(resolve => {
     let countdown = 11
     const interval = setInterval(() => {
-      console.log(`⏳ Countdown: ${countdown} seconds remaining`)
-      countdown -= 1
-      if (countdown < 0) {
-        clearInterval(interval)
-        resolve()
-      }
+        console.log(`⏳ Countdown: ${countdown} seconds remaining`)
+        countdown -= 1
+        if (countdown < 0) {
+            clearInterval(interval)
+            resolve()
+        }
     }, 1000)
-  })
+})
 
-  console.log(`[$] User claiming USDC from EVM escrow`)
-    
-    const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
-    const evmEscrowAddress = new Sdk.EscrowFactory(new Address(escrowFactory)).getSrcEscrowAddress(
-        srcEscrowEvent[0],
-        ESCROW_SRC_IMPLEMENTATION
-    )
 
-    const withdrawTxRequest = resolverContract.withdraw('src', evmEscrowAddress, secretBytesX, srcEscrowEvent[0])
-     
-    const Ftxy = {
-            ...withdrawTxRequest,
+
+const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
+const evmEscrowAddress = new Sdk.EscrowFactory(new Address(escrowFactory)).getSrcEscrowAddress(
+    evmEscrowEvent[0],
+    ESCROW_SRC_IMPLEMENTATION
+)
+
+console.log('🏦 WITHDRAWAL SETUP:', evmEscrowAddress)
+
+
+/**
+ * 
+             const {txHash: userClaimHash} = await srcChainUser.send(
+                resolverContract.withdraw('src', evmEscrowAddress, secretBytesX, evmEscrowEvent[0])
+            )
+            
+            console.log(`[${srcChainId}] User claimed USDC in tx ${userClaimHash}`)
+ */
+
+  const resolverWithdrawTxRequest = resolverContract.withdraw('src', evmEscrowAddress, secretBytesX, evmEscrowEvent[0])
+  //resolverWithdrawTxRequest.to = evmResolverPublicKey // Set the resolver contract as the recipient
+  console.log('📤 WITHDRAW TX REQUEST:')
+  console.log('To:', resolverWithdrawTxRequest.to)
+  console.log('Data length:', resolverWithdrawTxRequest.data?.length)
+
+const Ftxy = {
+            ...resolverWithdrawTxRequest,
             gasLimit: 10_000_000,
             
         }
+
+ console.log('📤 WITHDRAW TX REQUEST:', Ftxy)
+
+  const withdrawTx = await ResolverWallet.sendTransaction(
+    Ftxy
+  )
+  const withdrawReceipt = await withdrawTx.wait(1)
+
+  const resolverWithdrawHash = withdrawReceipt?.hash
+
+  console.log('✅ WITHDRAWAL TX SENT SUCCESSFULLY!')
+  console.log('Withdrawal receipt:', withdrawReceipt)
+  console.log('✅ WITHDRAWAL RESULT:')
+  console.log(`[$] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
+
+            /*
+ const srcDeployBlock = receipt?.blockHash as string
+ const orderFillHash = receipt?.hash as string
 
     const withdrawTx = await ResolverWallet.sendTransaction(
         Ftxy
@@ -556,7 +578,6 @@ console.log('Escrow event immutables:', srcEscrowEvent[0])
     console.log('Withdrawal receipt:', withdrawReceipt)
 
 
-  console.log('✅ Injective funding transaction sent successfully!')
 
    const azya = await injective.claim_funds_with_params_resolver(
                 swapId,
@@ -568,6 +589,7 @@ console.log('Escrow event immutables:', srcEscrowEvent[0])
   console.log("lets ee", azya)
 
   console.log('✅ Injective claim transaction sent successfully!')
+  */
 }
 
 
