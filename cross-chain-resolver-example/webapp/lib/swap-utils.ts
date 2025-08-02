@@ -402,7 +402,7 @@ else {
 
   await injective.fund_dst_escrow_with_keplr(
         createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex'),
-        "1000000", // 1 CUSDC (6 decimals)
+        "300000000", 
         injectiveResolverPublicKey, // INJ Resolver as recipient
         90_000_000, // expiry height
         swapId
