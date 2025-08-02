@@ -233,50 +233,53 @@ export default function TokenSwap() {
     }
   }, [swapData])
 
-  // Handle complete cross-chain swap (all steps in one function)
-  const handleSwap = async () => {
-    if (!metamaskWallet.isConnected || !keplrWallet.isConnected) {
-      alert("Please connect both wallets to proceed with the swap")
-      return
-    }
-
-    if (!fromAmount || Number.parseFloat(fromAmount) <= 0) {
-      alert("Please enter a valid amount to swap")
-      return
-    }
-
-    setIsSwapping(true)
-
-    try {
-      console.log('🚀 STARTING COMPLETE CROSS-CHAIN SWAP')
-      console.log('From amount:', fromAmount, fromToken)
-      console.log('To amount:', toAmount, toToken)
-      console.log('User address (Ethereum):', metamaskWallet.fullAddress)
-      console.log('User address (Injective):', keplrWallet.fullAddress)
-
-      // Execute the complete cross-chain swap (matching test spec exactly)
-      const result = await executeCrossChainSwap(
-        fromAmount,
-        metamaskWallet.fullAddress,
-        keplrWallet.fullAddress,
-        false,
-      )
-
-      console.log('🎉 CROSS-CHAIN SWAP COMPLETED!')
-      console.log('Result:', result)
-
-      // Update UI state
-      //setSwapData(result)
-      //alert('Cross-chain swap completed successfully!')
-
-    } catch (error) {
-      console.error('Cross-chain swap failed:', error)
-      alert(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    } finally {
-      setIsSwapping(false)
-    }
+// Handle complete cross-chain swap (all steps in one function)
+const handleSwap = async () => {
+  if (!metamaskWallet.isConnected || !keplrWallet.isConnected) {
+    alert("Please connect both wallets to proceed with the swap")
+    return
   }
 
+  if (!fromAmount || Number.parseFloat(fromAmount) <= 0) {
+    alert("Please enter a valid amount to swap")
+    return
+  }
+
+  setIsSwapping(true)
+
+  try {
+    console.log('🚀 STARTING COMPLETE CROSS-CHAIN SWAP')
+    console.log('From amount:', fromAmount, fromToken)
+    console.log('To amount:', toAmount, toToken)
+    console.log('User address (Ethereum):', metamaskWallet.fullAddress)
+    console.log('User address (Injective):', keplrWallet.fullAddress)
+    
+    // ✅ Determine swap direction dynamically
+    const isEvmToInj = fromToken === "USDC" // true for USDC->INJ, false for INJ->USDC
+    console.log('Swap direction (EVM to Injective):', isEvmToInj)
+
+    // Execute the complete cross-chain swap
+    const result = await executeCrossChainSwap(
+      fromAmount,
+      metamaskWallet.fullAddress,
+      keplrWallet.fullAddress,
+      isEvmToInj // ✅ Pass boolean value
+    )
+
+    console.log('🎉 CROSS-CHAIN SWAP COMPLETED!')
+    console.log('Result:', result)
+
+    // Update UI state
+    //setSwapData(result)
+    //alert('Cross-chain swap completed successfully!')
+
+  } catch (error) {
+    console.error('Cross-chain swap failed:', error)
+    alert(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  } finally {
+    setIsSwapping(false)
+  }
+}
   // Reset swap state
   const resetSwap = () => {
     setSwapData(null)
