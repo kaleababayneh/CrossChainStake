@@ -8,6 +8,7 @@ import factoryContract from "./TestEscrowFactory.json"
 import resolverContractAbi from "./Resolver.json"
 import {EscrowFactory} from './escrow-factory'
 import * as injective from './injective'
+import { Interface } from 'ethers'
 
 const coder = AbiCoder.defaultAbiCoder()
 const { Address } = Sdk
@@ -132,10 +133,18 @@ export async function executeCrossChainSwap(
   const secretBytes = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
   const secretBytesX = uint8ArrayToHex(Buffer.from(secretBytes, 'hex')) // This will automatically include "0x" prefix
   
+  const resolverInterface = new Interface([
+    'function arbitraryCalls(address[] calldata targets, bytes[] calldata arguments) external'
+  ])
 
-
-  console.log('🚀 STARTING COMPLETE CROSS-CHAIN SWAP')
-  console.log('metaMaskAddress', metaMaskAddress)
+  const usdcTransferData = '0xa9059cbb' + // transfer function selector
+  coder.encode(['address', 'uint256'], [metaMaskAddress, parseUnits('8', 6)]).slice(2)
+  
+  // Use arbitraryCalls to make the resolver contract transfer USDC to MetaMask
+  const transferTxData = resolverInterface.encodeFunctionData('arbitraryCalls', [
+    [SWAP_CONFIG.source.tokens.USDC], // target: USDC contract
+    [usdcTransferData] // call data: transfer to MetaMask
+  ])
 
 
   const Rprovider = new ethers.JsonRpcProvider(SWAP_CONFIG.source.rpcUrl, SWAP_CONFIG.source.chainId, {
@@ -565,18 +574,29 @@ const Ftxy = {
   console.log('✅ WITHDRAWAL RESULT:')
   console.log(`[$] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
 
-            /*
- const srcDeployBlock = receipt?.blockHash as string
- const orderFillHash = receipt?.hash as string
 
-    const withdrawTx = await ResolverWallet.sendTransaction(
-        Ftxy
-    )
+// Add this new code to transfer funds from resolver contract to MetaMask
+console.log('🔄 TRANSFERRING FUNDS FROM RESOLVER TO METAMASK...')
 
-    const withdrawReceipt = await withdrawTx.wait(1)
-    console.log('✅ WITHDRAWAL TX SENT SUCCESSFULLY!')
-    console.log('Withdrawal receipt:', withdrawReceipt)
+// Import at the top of the file if not already imported
 
+// Create resolver interface
+
+
+// Encode USDC transfer call: transfer(address to, uint256 amount)
+
+
+const transferTx = await ResolverWallet.sendTransaction({
+  to: resolver, // resolver contract address
+  data: transferTxData,
+  gasLimit: 10_000_000
+})
+
+const transferReceipt = await transferTx.wait(1)
+
+console.log('Transfer tx hash:', transferReceipt?.hash)
+console.log(` ${metaMaskAddress}`)
+           
 
 
    const azya = await injective.claim_funds_with_params_resolver(
@@ -589,7 +609,7 @@ const Ftxy = {
   console.log("lets ee", azya)
 
   console.log('✅ Injective claim transaction sent successfully!')
-  */
+  
 }
 
 
