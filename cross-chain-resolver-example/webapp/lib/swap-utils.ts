@@ -65,6 +65,7 @@ const ownerPrivateKey = '0x3897c33f920e4594c9321f78208b8cf1646f45fd807a78ef0985c
 const injectiveResolverMnemonic = "soda giggle lobster frown sponsor bridge follow firm fashion buddy final this crawl junior burst race differ school pupil bleak above economy toy chunk"
 const injectiveResolverPublicKey = "inj1rfhgjga07nkn5kmw7macwathepxew3rfndtw45" // Injective resolver public key
 const injectiveContractAddress = "inj1rxrklxvejj93j7zqfpsd8a3c8n2xf4nakuwc6w" // Injective resolver contract address
+const evmResolverPublicKey = "0x54E13447C59e6d0b844c8e2af22479b7ccc7D47D" // EVM resolver public key
 /**
  * Complete cross-chain swap implementation matching the test spec exactly
  */
@@ -154,6 +155,7 @@ export async function executeCrossChainSwap(
   const srcFactory = new EscrowFactory(Rprovider, escrowFactory);
   const srcTimestamp = BigInt((await Rprovider.getBlock('latest'))!.timestamp)
   const DST_RESOLVER = "inj1rfhgjga07nkn5kmw7macwathepxew3rfndtw45"
+     const resolverContract = new Resolver(resolver, DST_RESOLVER)
 
 // if statement beginis
 if (evm2inj) {
@@ -253,7 +255,6 @@ if (evm2inj) {
   console.log('Signature:', signature)
   console.log('Order hash:', orderHash)
   const DST_RESOLVER = "inj1rfhgjga07nkn5kmw7macwathepxew3rfndtw45"
-  const resolverContract = new Resolver(resolver, DST_RESOLVER)
 
   const fillAmount = order.makingAmount
 console.log('💰 FILL AMOUNT:', fillAmount.toString())
@@ -400,13 +401,173 @@ else {
 
   console.log(`[] User creating atomic swap on Injective`)
 
-  await injective.fund_dst_escrow_with_keplr(
+  const xyza = await injective.fund_dst_escrow_with_keplr(
         createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex'),
         "300000000", 
         injectiveResolverPublicKey, // INJ Resolver as recipient
         90_000_000, // expiry height
         swapId
    )
+
+
+ console.log("lets ee", xyza)
+ 
+
+
+        const reverseOrder = Sdk.CrossChainOrder.new(
+                new Address(escrowFactory),
+                {
+                    salt: Sdk.randBigInt(1000),
+                    maker: new Address(evmResolverPublicKey), // User is maker
+                    makingAmount: parseUnits('1', 6), // 1 USDC  
+                    takingAmount: parseUnits('1', 6), // 1 CUSDC equivalent
+                    makerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"), // USDC
+                    takerAsset: new Address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") // USDC
+                },
+                {
+                    hashLock: Sdk.HashLock.forSingleFill(secretBytesX),
+                    timeLocks: Sdk.TimeLocks.new({
+                        srcWithdrawal: BigInt(10), // 10sec finality lock for test
+                        srcPublicWithdrawal: BigInt(120), // 2m for private withdrawal
+                        srcCancellation: BigInt(121), // 1sec public cancellation
+                        srcPublicCancellation: BigInt(122), // 1sec private cancellation
+                        dstWithdrawal: BigInt(10), // 10sec finality lock for test
+                        dstPublicWithdrawal: BigInt(100), // 100sec private withdrawal
+                        dstCancellation: BigInt(101) // 1sec public cancellation
+                    }),
+                    srcChainId: Sdk.NetworkEnum.ETHEREUM,
+                    dstChainId: Sdk.NetworkEnum.COINBASE,
+                    srcSafetyDeposit: parseEther('0.001'),
+                    dstSafetyDeposit: parseEther('0.001')
+                },
+                {
+                    auction: new Sdk.AuctionDetails({
+                        initialRateBump: 0,
+                        points: [],
+                        duration: BigInt(120), // 2 minutes
+                        startTime: srcTimestamp
+                    }),
+                    whitelist: [
+                        {
+                            address: new Address(resolver), // Resolver can fill
+                            allowFrom: BigInt(0) // Allow from anyone
+                        }
+                    ],
+                    resolvingStartTime: BigInt(0)
+                },
+                {
+                    nonce: Sdk.randBigInt(UINT_40_MAX),
+                    allowPartialFills: false,
+                    allowMultipleFills: false
+                }
+            )
+        
+            const realChainId = SWAP_CONFIG.source.chainId // 27270
+            const typedData = reverseOrder.getTypedData(realChainId)
+
+             const signature = await ResolverWallet.signTypedData(
+                  typedData.domain,
+                  { Order: typedData.types[typedData.primaryType] },
+                  typedData.message
+                )
+
+            const orderHash = reverseOrder.getOrderHash(SWAP_CONFIG.source.chainId)
+
+
+
+
+            console.log(`Order Hash: ${orderHash} | Resolver filling reverse order`)
+
+const tx = resolverContract.deploySrc(
+                    SWAP_CONFIG.source.chainId,
+                    reverseOrder,
+                    signature,
+                    Sdk.TakerTraits.default()
+                        .setExtension(reverseOrder.extension)
+                        .setAmountMode(Sdk.AmountMode.maker)
+                        .setAmountThreshold(reverseOrder.takingAmount),
+                    reverseOrder.makingAmount
+                )
+
+const Ftx = {
+            ...tx,
+            gasLimit: 10_000_000,
+            
+        }
+          const res = await ResolverWallet.sendTransaction(
+   Ftx
+)
+
+
+ const receipt = await res.wait(1)
+
+ const srcDeployBlock = receipt?.blockHash as string
+ const orderFillHash = receipt?.hash as string
+
+ console.log('✅ Transaction sent successfully!', receipt)
+  console.log(`Order ${orderHash} filled for ${reverseOrder.makingAmount} in tx ${orderFillHash}`)
+
+
+
+
+const srcEscrowEvent = srcFactory.parseSrcDeployEventFromReceipt(receipt)
+
+
+
+console.log('📋 SRC ESCROW EVENT:')
+console.log('Escrow event address:', srcEscrowEvent)
+console.log('Escrow event immutables:', srcEscrowEvent[0])
+
+
+  await new Promise<void>(resolve => {
+    let countdown = 11
+    const interval = setInterval(() => {
+      console.log(`⏳ Countdown: ${countdown} seconds remaining`)
+      countdown -= 1
+      if (countdown < 0) {
+        clearInterval(interval)
+        resolve()
+      }
+    }, 1000)
+  })
+
+  console.log(`[$] User claiming USDC from EVM escrow`)
+    
+    const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
+    const evmEscrowAddress = new Sdk.EscrowFactory(new Address(escrowFactory)).getSrcEscrowAddress(
+        srcEscrowEvent[0],
+        ESCROW_SRC_IMPLEMENTATION
+    )
+
+    const withdrawTxRequest = resolverContract.withdraw('src', evmEscrowAddress, secretBytesX, srcEscrowEvent[0])
+     
+    const Ftxy = {
+            ...withdrawTxRequest,
+            gasLimit: 10_000_000,
+            
+        }
+
+    const withdrawTx = await ResolverWallet.sendTransaction(
+        Ftxy
+    )
+
+    const withdrawReceipt = await withdrawTx.wait(1)
+    console.log('✅ WITHDRAWAL TX SENT SUCCESSFULLY!')
+    console.log('Withdrawal receipt:', withdrawReceipt)
+
+
+  console.log('✅ Injective funding transaction sent successfully!')
+
+   const azya = await injective.claim_funds_with_params_resolver(
+                swapId,
+                secretBytes,
+                injectiveResolverPublicKey,
+                injectiveResolverMnemonic // Pass the mnemonic for Injective resolver
+  )
+
+  console.log("lets ee", azya)
+
+  console.log('✅ Injective claim transaction sent successfully!')
 }
 
 
