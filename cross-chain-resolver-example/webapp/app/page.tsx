@@ -17,6 +17,7 @@ import {
 } from "@/lib/swap-utils"
 import { ethers } from "ethers"
 
+
 // Types for wallet connections
 interface WalletState {
   isConnected: boolean
@@ -258,7 +259,7 @@ export default function TokenSwap() {
         fromAmount,
         metamaskWallet.fullAddress,
         keplrWallet.fullAddress,
-        true,
+        false,
       )
 
       console.log('🎉 CROSS-CHAIN SWAP COMPLETED!')

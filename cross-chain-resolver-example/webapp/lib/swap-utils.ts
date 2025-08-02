@@ -399,14 +399,14 @@ else {
   console.log('Welcome to the new world of cross-chain swaps!')
 
   console.log(`[] User creating atomic swap on Injective`)
-    
-  // await injective.fund_dst_escrow_with_params(
-  //       secretBytes, 
-  //       "1000000", // 1 CUSDC (6 decimals)
-  //       address2, // EVM user address as recipient
-  //       90_000_000, // expiry height
-  //       swapId
-  //   )
+
+  await injective.fund_dst_escrow_with_keplr(
+        createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex'),
+        "1000000", // 1 CUSDC (6 decimals)
+        injectiveResolverPublicKey, // INJ Resolver as recipient
+        90_000_000, // expiry height
+        swapId
+   )
 }
 
 
@@ -491,18 +491,3 @@ export function getSwapStatus(
 }
 
 // Type declarations for window objects
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>;
-      on: (event: string, callback: (accounts: string[]) => void) => void;
-      removeListener: (event: string, callback: (accounts: string[]) => void) => void;
-      isMetaMask?: boolean;
-    };
-    keplr?: {
-      enable: (chainId: string) => Promise<void>;
-      getOfflineSigner: (chainId: string) => any;
-      getKey: (chainId: string) => Promise<any>;
-    };
-  }
-} 
