@@ -367,18 +367,57 @@ export async function executeCrossChainSwap(
 
 }
  else {
- 
-    console.log(`[] User creating atomic swap on Injective`)
-
-    const lock_inj_on_src_chain = await injective.fund_dst_escrow_with_keplr(
-          createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex'),
-          parseUnits(makerAmountReq, 18).toString(),
-          injectiveResolverPublicKey, // INJ Resolver as recipient
-          90_000_000, // expiry height
-          swapId
-    )
-    console.log("lets ee", lock_inj_on_src_chain)
+  
+  
+    console.log(`🚀 STARTING GASLESS CROSS-CHAIN SWAP (INJ → EVM)`)
+    console.log(`💡 Using Next.js API for fee grants - no protobuf encoding issues!`)
+    console.log(`⛽ User pays NO gas fees - resolver covers transaction costs`)
+    console.log(`🔄 Flow: Fee Grant → Gasless User Tx → Resolver Fills Order → Transfer to User`)
+  
+    // Step 1: Resolver grants fee allowance to user via Next.js API
+    console.log('🎁 Step 1: Resolver granting fee allowance to user via API...')
+    let feeGrant;
+    try {
+      feeGrant = await injective.grantFeeAllowanceToUser(
+        keplrAddress, // user's Injective address
+        injectiveResolverMnemonic, // resolver mnemonic (will be used by API)
+        '10000000000000000', // 0.01 INJ allowance
+        3 // 3 minutes duration
+      )
       
+      console.log('✅ Fee grant successful via Next.js API!')
+      console.log('- Tx Hash:', feeGrant.txHash)
+      console.log('- Granter:', feeGrant.granter)
+      console.log('- Expires:', feeGrant.expiresAt)
+    } catch (error) {
+      console.error('❌ Fee grant failed:', error)
+      throw new Error(`Fee grant failed: ${error}`)
+    }
+  
+    // Step 2: User signs transaction intent (this could be a simple message sign)
+    console.log('✍️ Step 2: User signing transaction intent...')
+    // You could add a Keplr message sign here for user confirmation
+    
+    // Step 3: User creates gasless swap using the fee grant
+    console.log('⛽ Step 3: User creating gasless swap with granted fees...')
+    let lock_inj_on_src_chain;
+    try {
+      lock_inj_on_src_chain = await injective.fund_dst_escrow_with_fee_grant(
+        createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex'),
+        parseUnits(makerAmountReq, 18).toString(),
+        injectiveResolverPublicKey, // INJ Resolver as recipient
+        90_000_000, // expiry height
+        swapId,
+        feeGrant.granter // Use the actual granter address from fee grant response
+      )
+      
+      console.log("✅ Gasless swap created successfully!")
+      console.log("- Swap ID:", swapId)
+      console.log("- Tx Hash:", lock_inj_on_src_chain.txHash)
+    } catch (error) {
+      console.error('❌ Gasless swap creation failed:', error)
+      throw new Error(`Gasless swap creation failed: ${error}`)
+    }
 
     const reverseOrder = Sdk.CrossChainOrder.new(
         new Address(escrowFactory),
@@ -541,7 +580,15 @@ export async function executeCrossChainSwap(
       )
 
       console.log('✅ Injective claim transaction sent successfully!')
-      console.log('Claim receipt:',  resolver_claim)    
+      console.log('Claim receipt:',  resolver_claim)
+      
+      console.log('')
+      console.log('🎉 GASLESS CROSS-CHAIN SWAP COMPLETED SUCCESSFULLY!')
+      console.log('✅ User paid ZERO gas fees on Injective')
+      console.log('✅ Fee grant handled via Next.js API (no browser issues)')
+      console.log('✅ Funds transferred to user MetaMask wallet')
+      console.log('💰 Resolver covered all transaction costs')
+      console.log('')
 }
 
 

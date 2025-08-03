@@ -1,25 +1,15 @@
-//import { AptosAccount, AptosClient, TxnBuilderTypes, BCS } from "aptos";
 import { ethers} from "ethers";
 import { createHash } from 'crypto';
 import {
   MsgExecuteContractCompat,
   MsgInstantiateContract,
-  PrivateKey,
-  MsgBroadcasterWithPk,
-  // Add these Injective-specific imports:
   ChainGrpcWasmApi,
   createTransaction,
   ChainRestTendermintApi,
 } from '@injectivelabs/sdk-ts'
-import { keccak256 } from 'ethers'
 import * as dotenv from 'dotenv'
 import {  Network } from '@injectivelabs/networks'
 import { ChainId} from '@injectivelabs/ts-types';
-import { MsgBroadcaster } from '@injectivelabs/wallet-core'
-import { getNetworkEndpoints } from '@injectivelabs/networks'
-import { WalletStrategy } from '@injectivelabs/wallet-strategy'
-import { SigningCosmWasmClient } from '@cosmjs/cosmwasm-stargate'
-import { GasPrice } from '@cosmjs/stargate'
 import {
   BaseAccount,
   ChainRestAuthApi,
@@ -28,6 +18,7 @@ import {
   BroadcastModeKeplr,
   getTxRawFromTxRawOrDirectSignResponse,
   TxRestApi,
+  
 } from '@injectivelabs/sdk-ts'
 import { getStdFee, DEFAULT_BLOCK_TIMEOUT_HEIGHT } from '@injectivelabs/utils'
 import { BigNumberInBase } from '@injectivelabs/utils'
@@ -35,8 +26,11 @@ import { TransactionException } from '@injectivelabs/exceptions'
 import { SignDoc } from '@keplr-wallet/types'
 import Long from 'long'
 
-dotenv.config()
+import {  MsgBroadcasterWithPk, PrivateKey } from '@injectivelabs/sdk-ts'
 
+
+
+dotenv.config()
 
 const codeId = 33343 // e.g. "33340"
 const contractLabel = 'CW20 Atomic Swap'
@@ -384,6 +378,189 @@ export async function fund_dst_escrow_with_keplr(
     return { swapId, txHash }
   } catch (error) {
     console.error('❌ Keplr transaction failed:', error)
+    throw error
+  }
+}
+
+
+export async function grantFeeAllowanceToUser(
+  userAddress: string,
+  resolverMnemonic: string,
+  allowanceAmount = '10000000000000000', // 0.01 INJ in wei
+  durationMinutes = 3
+) {
+  console.log('🎁 GRANTING FEE ALLOWANCE via Next.js API')
+  console.log('- User address:', userAddress)
+  console.log('- Amount:', allowanceAmount, 'inj')
+  console.log('- Duration:', durationMinutes, 'minutes')
+
+  try {
+    // Call the Next.js API route instead of doing it in the browser
+    const response = await fetch('/api/feegrant', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        granteeAddress: userAddress,
+        granterMnemonic: resolverMnemonic,
+        amount: allowanceAmount,
+        durationMinutes: durationMinutes
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(`API fee grant failed: ${errorData.error}`)
+    }
+
+    const result = await response.json()
+    
+    console.log('✅ Fee allowance granted via Next.js API!')
+    console.log('Tx Hash:', result.txHash)
+    console.log('Granter:', result.granter)
+    console.log('Expires:', result.expiresAt)
+
+    return {
+      txHash: result.txHash,
+      granter: result.granter,
+      grantee: result.grantee,
+      allowanceAmount: result.amount,
+      expiresAt: result.expiresAt,
+    }
+
+  } catch (error) {
+    console.error('❌ Next.js API fee grant failed:', error)
+    throw error
+  }
+}
+
+
+export async function fund_dst_escrow_with_fee_grant(
+  hash: string,
+  amount: string, 
+  recipient: string, 
+  expiresAtHeight: number,
+  swapId: string,
+  granterAddress: string // The resolver address that granted the fees
+) {
+  if (!window.keplr) {
+    throw new Error('Keplr wallet not found')
+  }
+
+  const chainId = 'injective-888' // Injective testnet chain ID
+  await window.keplr.enable(chainId)
+  
+  const key = await window.keplr.getKey(chainId)
+  const offlineSigner = window.keplr.getOfflineSigner(chainId)
+  const userAddress = key.bech32Address
+  const pubKey = Buffer.from(key.pubKey).toString('base64')
+
+  console.log('🔧 GASLESS FUNDING - User address:', userAddress)
+  console.log('- Using fee grant from:', granterAddress)
+  console.log('- contractAddress:', contractAddress)
+  console.log('- hash:', hash)
+  console.log('- amount:', amount)
+  console.log('- recipient:', recipient)
+  console.log('- expiresAtHeight:', expiresAtHeight)
+  console.log('- swapId:', swapId)
+
+  // Create the execute message
+  const executeMsg = {
+    create: {
+      id: swapId,
+      hash,
+      recipient,
+      expires: {
+        at_height: expiresAtHeight,
+      },
+    },
+  }
+
+  try {
+    const restEndpoint = 'https://testnet.sentry.lcd.injective.network'
+
+    // Step 1: Get account details
+    const chainRestAuthApi = new ChainRestAuthApi(restEndpoint)
+    const accountDetailsResponse = await chainRestAuthApi.fetchAccount(userAddress)
+    const baseAccount = BaseAccount.fromRestApi(accountDetailsResponse)
+
+    // Step 2: Get block details for timeout
+    const chainRestTendermintApi = new ChainRestTendermintApi(restEndpoint)
+    const latestBlock = await chainRestTendermintApi.fetchLatestBlock()
+    const latestHeight = latestBlock.header.height
+    const timeoutHeight = new BigNumberInBase(latestHeight).plus(DEFAULT_BLOCK_TIMEOUT_HEIGHT)
+
+    // Step 3: Create the contract execution message
+    const msg = MsgExecuteContractCompat.fromJSON({
+      sender: userAddress,
+      contractAddress,
+      msg: executeMsg,
+      funds: [
+        {
+          amount: amount,
+          denom: 'inj',
+        },
+      ],
+    })
+
+    // Step 4: Prepare the transaction with fee grant
+    const { signDoc } = createTransaction({
+      pubKey,
+      chainId,
+      fee: getStdFee({ 
+        gas: '2000000',  // <-- Change this from '200000' to '2000000'
+        granter: granterAddress
+      }),
+      message: msg,
+      sequence: baseAccount.sequence,
+      timeoutHeight: timeoutHeight.toNumber(),
+      accountNumber: baseAccount.accountNumber,
+    })
+
+    console.log('🔧 DEBUG - About to sign gasless transaction with fee grant')
+
+    // Step 5: Sign the transaction - Convert accountNumber to Long for Keplr compatibility
+    const keplrSignDoc = {
+      ...signDoc,
+      accountNumber: Long.fromString(signDoc.accountNumber.toString())
+    }
+    
+    const directSignResponse = await offlineSigner.signDirect(
+      userAddress,
+      keplrSignDoc as SignDoc
+    )
+    
+    // Step 6: Get the signed transaction
+    const txRaw = getTxRawFromTxRawOrDirectSignResponse(directSignResponse)
+
+    // Step 7: Broadcast the transaction
+    const result = await window.keplr.sendTx(
+      chainId,
+      CosmosTxV1Beta1Tx.TxRaw.encode(txRaw).finish(),
+      BroadcastModeKeplr.Sync
+    )
+
+    if (!result || result.length === 0) {
+      throw new TransactionException(
+        new Error('Gasless transaction failed to be broadcasted'),
+        { contextModule: 'Keplr-FeeGrant' }
+      )
+    }
+
+    const txHash = Buffer.from(result).toString('hex')
+
+    // Step 8: Wait for transaction confirmation
+    const txRestApi = new TxRestApi(restEndpoint)
+    await txRestApi.fetchTxPoll(txHash)
+
+    console.log('✅ Gasless destination escrow funded!')
+    console.log('Tx Hash:', txHash)
+    console.log('💰 Gas fees paid by resolver:', granterAddress)
+    
+    return { swapId, txHash }
+  } catch (error) {
+    console.error('❌ Gasless transaction failed:', error)
     throw error
   }
 }
