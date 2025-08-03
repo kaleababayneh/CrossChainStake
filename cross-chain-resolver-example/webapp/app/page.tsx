@@ -26,10 +26,10 @@ interface WalletState {
   isLoadingBalance: boolean
 }
 
-const ethereumTokens = [{ symbol: "USDC", name: "USD Coin", logo: "/placeholder.svg?height=24&width=24" }]
+const ethereumTokens = [{ symbol: "USDC", name: "USD Coin", logo: "/usdc.svg?height=144&width=144" }]
 
 const cosmosTokens = [
-  { symbol: "INJ", name: "Injective", logo: "/placeholder.svg?height=24&width=24" }
+  { symbol: "INJ", name: "Injective", logo: "/inj.svg?height=44&width=44" }
 ]
 
 export default function TokenSwap() {
@@ -206,7 +206,41 @@ export default function TokenSwap() {
   const getTokenDetails = (symbol: string) => {
     const ethereumToken = ethereumTokens.find((token) => token.symbol === symbol)
     const cosmosToken = cosmosTokens.find((token) => token.symbol === symbol)
+
+    // logo for usdc is usdc.svg
+
     return ethereumToken || cosmosToken
+  }
+
+  // Helper functions for dynamic UI
+  const getTokenNetwork = (symbol: string) => {
+    const ethereumToken = ethereumTokens.find((token) => token.symbol === symbol)
+    if (ethereumToken) return { name: "Ethereum", logo: "/ethereum.svg" }
+    
+    const cosmosToken = cosmosTokens.find((token) => token.symbol === symbol)
+    if (cosmosToken) return { name: "Cosmos", logo: "/cosmos.svg" }
+    
+    return { name: "Unknown", logo: "/placeholder.svg" }
+  }
+
+  const getWalletForToken = (symbol: string) => {
+    const ethereumToken = ethereumTokens.find((token) => token.symbol === symbol)
+    if (ethereumToken) return metamaskWallet
+    
+    const cosmosToken = cosmosTokens.find((token) => token.symbol === symbol)
+    if (cosmosToken) return keplrWallet
+    
+    return null
+  }
+
+  const getAvailableTokensForToken = (symbol: string) => {
+    const ethereumToken = ethereumTokens.find((token) => token.symbol === symbol)
+    if (ethereumToken) return ethereumTokens
+    
+    const cosmosToken = cosmosTokens.find((token) => token.symbol === symbol)
+    if (cosmosToken) return cosmosTokens
+    
+    return []
   }
 
 
@@ -329,7 +363,7 @@ const handleSwap = async () => {
       <header className="relative z-10 flex justify-between items-center p-6">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl shadow-lg"></div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">CrossSwap</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Cross-Stake</h1>
           <div className="text-xs text-gray-400 mt-1">Ethereum ↔ Cosmos</div>
         </div>
 
@@ -341,7 +375,7 @@ const handleSwap = async () => {
             size="sm"
             className="flex items-center space-x-2 min-w-[140px] rounded-xl font-medium border-white/20 hover:border-white/40 transition-all duration-200"
           >
-            <img src="/placeholder.svg?height=20&width=20" alt="MetaMask" className="w-5 h-5 rounded-md" />
+            <img src="/metamask.svg?height=30&width=30" alt="MetaMask" className="w-5 h-5 rounded-md" />
             <span className="text-sm font-medium">
               {metamaskWallet.isConnected ? metamaskWallet.address : "MetaMask"}
             </span>
@@ -353,7 +387,7 @@ const handleSwap = async () => {
             size="sm"
             className="flex items-center space-x-2 min-w-[130px] rounded-xl font-medium border-white/20 hover:border-white/40 transition-all duration-200"
           >
-            <img src="/placeholder.svg?height=20&width=20" alt="Keplr" className="w-5 h-5 rounded-md" />
+            <img src="/keplr.svg?height=30&width=30" alt="Keplr" className="w-5 h-5 rounded-md" />
             <span className="text-sm font-medium">{keplrWallet.isConnected ? keplrWallet.address : "Keplr"}</span>
           </Button>
         </div>
@@ -365,12 +399,14 @@ const handleSwap = async () => {
           <div className="space-y-6">
             <div className="text-center">
               <h2 className="text-2xl font-bold text-white mb-2">Swap Tokens</h2>
-              <p className="text-gray-400 text-sm font-medium">Cross-chain bridge between Ethereum and Cosmos</p>
+              <p className="text-gray-400 text-sm font-medium">Cross-chain swap between Ethereum and Cosmos</p>
             </div>
 
-            {/* From Token - Ethereum Only */}
+            {/* From Token - Dynamic Network */}
             <div className="space-y-3">
-              <label className="text-sm font-semibold text-gray-300">From (Ethereum)</label>
+              <label className="text-sm font-semibold text-gray-300">
+                From ({getTokenNetwork(fromToken).name})
+              </label>
               <div className="relative">
                 <Input
                   type="number"
@@ -384,7 +420,7 @@ const handleSwap = async () => {
                     <SelectValue>
                       <div className="flex items-center space-x-2">
                         <img
-                          src={getTokenDetails(fromToken)?.logo || "/placeholder.svg?query=usdc+coin+logo"}
+                          src={getTokenDetails(fromToken)?.logo || "/usdc.svg?query=usdc+coin+logo"}
                           alt={fromToken}
                           className="w-5 h-5 rounded-full"
                         />
@@ -393,54 +429,66 @@ const handleSwap = async () => {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="rounded-2xl bg-gray-900/95 backdrop-blur-xl border-white/20">
-                    {/* Ethereum Network Header */}
-                    <div className="px-3 py-2 text-xs font-bold text-gray-400 flex items-center space-x-2">
-                      <img src="/placeholder.svg?height=16&width=16" alt="Ethereum" className="w-4 h-4 rounded-full" />
-                      <span>ETHEREUM NETWORK</span>
-                    </div>
-                    {ethereumTokens.map((token) => (
-                      <SelectItem key={token.symbol} value={token.symbol} className="pl-8 rounded-xl hover:bg-white/10">
-                        <div className="flex items-center space-x-3">
-                          <img
-                            src={token.logo || "/placeholder.svg?query=usdc+coin+logo"}
-                            alt={token.name}
-                            className="w-5 h-5 rounded-full"
-                          />
-                          <div>
-                            <span className="font-semibold">{token.symbol}</span>
-                            <span className="text-xs text-gray-400 ml-2">{token.name}</span>
+                    {(() => {
+                      const fromNetwork = getTokenNetwork(fromToken)
+                      const availableTokens = getAvailableTokensForToken(fromToken)
+                      
+                      return (
+                        <>
+                          {/* Dynamic Network Header */}
+                          <div className="px-3 py-2 text-xs font-bold text-gray-400 flex items-center space-x-2">
+                            <img src={fromNetwork.logo} alt={fromNetwork.name} className="w-4 h-4 rounded-full" />
+                            <span>{fromNetwork.name.toUpperCase()} NETWORK</span>
                           </div>
-                        </div>
-                      </SelectItem>
-                    ))}
+                          {availableTokens.map((token) => (
+                            <SelectItem key={token.symbol} value={token.symbol} className="pl-8 rounded-xl hover:bg-white/10">
+                              <div className="flex items-center space-x-3">
+                                <img
+                                  src={token.logo || "/placeholder.svg?query=usdc+coin+logo"}
+                                  alt={token.name}
+                                  className="w-5 h-5 rounded-full"
+                                />
+                                <div>
+                                  <span className="font-semibold">{token.symbol}</span>
+                                  <span className="text-xs text-gray-400 ml-2">{token.name}</span>
+                                </div>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </>
+                      )
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
-              {metamaskWallet.isConnected && (
-                <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
-                  <span>
-                    Balance:{" "}
-                    <span className="text-white font-semibold">
-                      {metamaskWallet.isLoadingBalance ? (
-                        <span className="inline-flex items-center space-x-1">
-                          <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
-                          <span>Loading...</span>
-                        </span>
-                      ) : (
-                        formatBalance(metamaskWallet.balance, fromToken)
-                      )}
+              {(() => {
+                const wallet = getWalletForToken(fromToken)
+                return wallet?.isConnected && (
+                  <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
+                    <span>
+                      Balance:{" "}
+                      <span className="text-white font-semibold">
+                        {wallet.isLoadingBalance ? (
+                          <span className="inline-flex items-center space-x-1">
+                            <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
+                            <span>Loading...</span>
+                          </span>
+                        ) : (
+                          formatBalance(wallet.balance, fromToken)
+                        )}
+                      </span>
                     </span>
-                  </span>
-                  <Button
-                    onClick={refreshBalances}
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 w-5 p-0 text-gray-400 hover:text-white"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                  </Button>
-                </div>
-              )}
+                    <Button
+                      onClick={refreshBalances}
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 text-gray-400 hover:text-white"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Swap Direction Button */}
@@ -455,9 +503,11 @@ const handleSwap = async () => {
               </Button>
             </div>
 
-            {/* To Token - Cosmos Only */}
+            {/* To Token - Dynamic Network */}
             <div className="space-y-3">
-              <label className="text-sm font-semibold text-gray-300">To (Cosmos)</label>
+              <label className="text-sm font-semibold text-gray-300">
+                To ({getTokenNetwork(toToken).name})
+              </label>
               <div className="relative">
                 <Input
                   type="number"
@@ -480,59 +530,71 @@ const handleSwap = async () => {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="rounded-2xl bg-gray-900/95 backdrop-blur-xl border-white/20">
-                    {/* Cosmos Network Header */}
-                    <div className="px-3 py-2 text-xs font-bold text-gray-400 flex items-center space-x-2">
-                      <img src="/placeholder.svg?height=16&width=16" alt="Cosmos" className="w-4 h-4 rounded-full" />
-                      <span>COSMOS NETWORK</span>
-                    </div>
-                    {cosmosTokens.map((token) => (
-                      <SelectItem key={token.symbol} value={token.symbol} className="pl-8 rounded-xl hover:bg-white/10">
-                        <div className="flex items-center space-x-3">
-                          <img
-                            src={
-                              token.logo ||
-                              (token.symbol === "INJ"
-                                ? "/placeholder.svg?query=injective+teal+logo"
-                                : "/placeholder.svg?query=neutron+black+logo")
-                            }
-                            alt={token.name}
-                            className="w-5 h-5 rounded-full"
-                          />
-                          <div>
-                            <span className="font-semibold">{token.symbol}</span>
-                            <span className="text-xs text-gray-400 ml-2">{token.name}</span>
+                    {(() => {
+                      const toNetwork = getTokenNetwork(toToken)
+                      const availableTokens = getAvailableTokensForToken(toToken)
+                      
+                      return (
+                        <>
+                          {/* Dynamic Network Header */}
+                          <div className="px-3 py-2 text-xs font-bold text-gray-400 flex items-center space-x-2">
+                            <img src={toNetwork.logo} alt={toNetwork.name} className="w-4 h-4 rounded-full" />
+                            <span>{toNetwork.name.toUpperCase()} NETWORK</span>
                           </div>
-                        </div>
-                      </SelectItem>
-                    ))}
+                          {availableTokens.map((token) => (
+                            <SelectItem key={token.symbol} value={token.symbol} className="pl-8 rounded-xl hover:bg-white/10">
+                              <div className="flex items-center space-x-3">
+                                <img
+                                  src={
+                                    token.logo ||
+                                    (token.symbol === "INJ"
+                                      ? "/placeholder.svg?query=injective+teal+logo"
+                                      : "/placeholder.svg?query=neutron+black+logo")
+                                  }
+                                  alt={token.name}
+                                  className="w-5 h-5 rounded-full"
+                                />
+                                <div>
+                                  <span className="font-semibold">{token.symbol}</span>
+                                  <span className="text-xs text-gray-400 ml-2">{token.name}</span>
+                                </div>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </>
+                      )
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
-              {keplrWallet.isConnected && (
-                <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
-                  <span>
-                    Balance:{" "}
-                    <span className="text-white font-semibold">
-                      {keplrWallet.isLoadingBalance ? (
-                        <span className="inline-flex items-center space-x-1">
-                          <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
-                          <span>Loading...</span>
-                        </span>
-                      ) : (
-                        formatBalance(keplrWallet.balance, toToken)
-                      )}
+              {(() => {
+                const wallet = getWalletForToken(toToken)
+                return wallet?.isConnected && (
+                  <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
+                    <span>
+                      Balance:{" "}
+                      <span className="text-white font-semibold">
+                        {wallet.isLoadingBalance ? (
+                          <span className="inline-flex items-center space-x-1">
+                            <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
+                            <span>Loading...</span>
+                          </span>
+                        ) : (
+                          formatBalance(wallet.balance, toToken)
+                        )}
+                      </span>
                     </span>
-                  </span>
-                  <Button
-                    onClick={refreshBalances}
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 w-5 p-0 text-gray-400 hover:text-white"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                  </Button>
-                </div>
-              )}
+                    <Button
+                      onClick={refreshBalances}
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 text-gray-400 hover:text-white"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Exchange Rate */}
@@ -643,7 +705,7 @@ const handleSwap = async () => {
       {/* Footer */}
       <footer className="relative z-10 text-center text-gray-500 text-sm pb-8">
         <p className="font-medium">
-          Powered by <span className="text-white font-semibold">CrossSwap</span> • Ethereum ↔ Cosmos Bridge
+          Powered by <span className="text-white font-semibold">1inch Fusion+</span> • Ethereum ↔ Cosmos Swap
         </p>
       </footer>
     </div>

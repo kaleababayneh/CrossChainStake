@@ -329,7 +329,7 @@ describe('Resolving example', () => {
 
 
   
-        it.skip('should swap Injective Token -> EVM USDC. Single fill only ', async () => {
+        it('should swap Injective Token -> EVM USDC. Single fill only ', async () => {
 
             const swapId = `swip-${Date.now()}`
             const secretBytes =  Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('')

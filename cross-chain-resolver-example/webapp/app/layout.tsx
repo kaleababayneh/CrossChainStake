@@ -10,7 +10,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "CrossSwap - Ethereum to Cosmos Bridge",
+  title: "CrossSwap - Ethereum to Cosmos Swap",
   description: "Swap tokens between Ethereum and Cosmos networks",
     generator: 'v0.dev'
 }
