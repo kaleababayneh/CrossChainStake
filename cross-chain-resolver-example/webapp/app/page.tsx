@@ -402,6 +402,7 @@ const handleSwap = async () => {
       }
     }
 
+    let stakeInj = false
     const result = await executeCrossChainSwap(
       makerAmountReq,
       takerAmountReq,
@@ -409,7 +410,8 @@ const handleSwap = async () => {
       keplrWallet.fullAddress,
       isEvmToInj, // ✅ Pass boolean value,
       secretBytes,
-      callbacks
+      callbacks,
+      stakeInj
     )
 
     console.log('🎉 CROSS-CHAIN SWAP COMPLETED!')

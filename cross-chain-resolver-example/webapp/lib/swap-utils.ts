@@ -128,14 +128,7 @@ export interface SwapProgressCallbacks {
 
 export async function executeCrossChainSwap(
   
-  makerAmountReq: string,
-  takerAmountReq: string,
-  metaMaskAddress: string,
-  keplrAddress: string,
-  evm2inj: boolean,
-  secretBytes: string,
-  callbacks?: SwapProgressCallbacks
-
+makerAmountReq: string, takerAmountReq: string, metaMaskAddress: string, keplrAddress: string, evm2inj: boolean, secretBytes: string, callbacks?: SwapProgressCallbacks, stakeInj?: boolean
 ): Promise<any> {
 
   const swapId = `swap-${Date.now()}`
@@ -170,7 +163,7 @@ export async function executeCrossChainSwap(
   const DST_RESOLVER = "inj1rfhgjga07nkn5kmw7macwathepxew3rfndtw45"
   const resolverContract = new Resolver(resolver, DST_RESOLVER)
 
-  if (evm2inj) {
+   if (evm2inj) {
 
       // Step 1: Token Approval
       callbacks?.onStepUpdate('approve', 'in_progress', undefined, 'Approving USDC for cross-chain transfer...')
@@ -643,9 +636,15 @@ export async function executeCrossChainSwap(
       console.log('✅ Funds transferred to user MetaMask wallet')
       console.log('💰 Resolver covered all transaction costs')
       console.log('')
+
+
+      if (stakeInj) {
+        console.log('🎉 Staking INJ on Injective...')
+      }
 }
 
 
+      
 
 
            return {
