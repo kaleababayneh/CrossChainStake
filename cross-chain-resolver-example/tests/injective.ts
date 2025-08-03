@@ -7,7 +7,6 @@ import {
   PrivateKey,
   MsgBroadcasterWithPk,
 } from '@injectivelabs/sdk-ts'
-import { keccak256 } from 'ethers'
 import * as dotenv from 'dotenv'
 import {  Network } from '@injectivelabs/networks'
 import { ChainId} from '@injectivelabs/ts-types';
@@ -16,18 +15,16 @@ dotenv.config()
 
 
 // Using a mnemonic phrase
-const mnemonic = process.env.MNEMONIC as string 
-const mnemonic2 = process.env.MNEMONIC2 as string
+const mnemonic = process.env.MNEMONIC as string || "snap half peasant letter empty kid cement vast comic trigger goat speed explain frog busy sand dial quote victory crew detail airport recall chef"
 
 const wallet = PrivateKey.fromMnemonic(mnemonic)
 const address = wallet.toAddress().toBech32()
 
 
-const codeId = 33343 // e.g. "33340"
+const codeId = 33343 
 const contractLabel = 'CW20 Atomic Swap'
-const gas = { gas: 2_000_000, gasPrice: 500_000_000 } // adjust if needed
-const recipientAddress = process.env.RECIPIENT        // e.g. 'inj1...'
-const contractAddress = process.env.CW_20_ATOMIC_SWAP_CONTRACT_ADDRESS as string 
+const recipientAddress = "inj12nnymkfwlr6c6c5ksmrq29nlh4x0pmls6xmkc9"      
+const contractAddress = "inj1rxrklxvejj93j7zqfpsd8a3c8n2xf4nakuwc6w" 
 
 const preimage = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
@@ -81,10 +78,7 @@ export async function anounce_order() {
     const expiresAtHeight = 90_000_000
   
     const swapId = 'swap-cusdc-001'
-  
-    // This is the message that the CW20 token contract expects
- 
-    
+
     const executeMsg = {
       create: {
         id: swapId,
@@ -121,17 +115,16 @@ export async function anounce_order() {
 }
 
 export async function fund_dst_escrow_with_params(
-  hash: string, 
+  preimage: string, 
   amount: string, 
   recipient: string, 
   expiresAtHeight: number,
-  swapId: string,
-  privateMnemonic: string = mnemonic
+  swapId: string
 ) {
+
+  const hash = createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
   console.log(`💰 Funding dst escrow with ${amount} CUSDC from ${address}`)
-
-  const wallet = PrivateKey.fromMnemonic(privateMnemonic)
-
+  
   const broadcaster = new MsgBroadcasterWithPk({
       network: Network.Testnet,
       chainId: ChainId.Testnet,
