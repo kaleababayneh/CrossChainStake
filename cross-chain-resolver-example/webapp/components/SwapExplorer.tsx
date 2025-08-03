@@ -315,7 +315,7 @@ export function SwapExplorer({
                           onClick={() => window.open(step.explorerUrl, '_blank')}
                           variant="outline"
                           size="sm"
-                          className="h-6 px-2 text-xs border-white/20 text-gray-300 hover:text-white hover:border-white/40 transition-all duration-200"
+                          className="h-6 px-2 text-xs border-white/20 text-gray-300 hover:text-white hover:border-white/40 transition-all duration-200 bg-gray-800/50 hover:bg-gray-700/50"
                         >
                           <ExternalLink className="w-3 h-3 mr-1" />
                           <span className="font-mono text-xs">

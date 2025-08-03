@@ -64,6 +64,10 @@ export default function TokenSwap() {
   // Sidebar state
   const [showExplorer, setShowExplorer] = useState(false)
 
+  // Add exchange rate state
+  const [exchangeRate, setExchangeRate] = useState<number>(0.001) // Default fallback rate
+  const [isLoadingRate, setIsLoadingRate] = useState<boolean>(false)
+
   // Connect MetaMask
   const connectMetaMask = async () => {
     if (typeof window !== "undefined" && (window as any).ethereum) {
@@ -248,16 +252,61 @@ export default function TokenSwap() {
     return []
   }
 
-
-  // FIX THIS
-
-  // Handle amount changes
-  const handleFromAmountChange = (value: string) => {
-    setFromAmount(value)
-    // Hardcoded exchange rate: 1000 USDC = 1 INJ
-    const rate = 1 / 1000 // 0.001 INJ per USDC
-    setToAmount(value ? (Number.parseFloat(value) * rate).toFixed(6) : "")
+  // Function to fetch real-time exchange rate
+  const fetchExchangeRate = async (): Promise<number> => {
+    try {
+      setIsLoadingRate(true)
+      
+      // Try CoinGecko API first (free, no API key required)
+      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=injective-protocol,usd-coin&vs_currencies=usd')
+      const data = await response.json()
+      
+      if (data['injective-protocol'] && data['usd-coin']) {
+        const injPrice = data['injective-protocol'].usd
+        const usdcPrice = data['usd-coin'].usd
+        
+        // Calculate rate: how much INJ you get for 1 USDC
+        const rate = injPrice / usdcPrice
+        console.log('📊 Real-time exchange rate:', rate, 'INJ per USDC')
+        return rate
+      }
+      
+      // Fallback to Coinbase API if CoinGecko fails
+      const coinbaseResponse = await fetch('https://api.coinbase.com/v2/prices/INJ-USD/spot')
+      const coinbaseData = await coinbaseResponse.json()
+      
+      if (coinbaseData.data && coinbaseData.data.amount) {
+        const injPrice = parseFloat(coinbaseData.data.amount)
+        // USDC is pegged to USD, so rate = 1 / INJ price
+        const rate = 1 / injPrice
+        console.log('📊 Coinbase exchange rate:', rate, 'INJ per USDC')
+        return rate
+      }
+      
+      throw new Error('Failed to fetch exchange rate from both APIs')
+    } catch (error) {
+      console.error('❌ Error fetching exchange rate:', error)
+      // Return fallback rate if all APIs fail
+      return 0.001
+    } finally {
+      setIsLoadingRate(false)
+    }
   }
+
+  // Fetch exchange rate on component mount and periodically
+  useEffect(() => {
+    const fetchRate = async () => {
+      const rate = await fetchExchangeRate()
+      setExchangeRate(rate)
+    }
+    
+    fetchRate()
+    
+    // Refresh rate every 30 seconds
+    const interval = setInterval(fetchRate, 30000)
+    
+    return () => clearInterval(interval)
+  }, [])
 
   // Update swap status when dependencies change
   useEffect(() => {
@@ -385,6 +434,11 @@ const handleSwap = async () => {
       withdrawTx: result?.withdrawTx
     })
 
+    // Refresh balances and clear input fields after successful swap
+    await refreshBalances()
+    setFromAmount("")
+    setToAmount("")
+
   } catch (error) {
     console.error('Cross-chain swap failed:', error)
     alert(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -412,6 +466,13 @@ const handleSwap = async () => {
     setToToken(tempToken)
     setFromAmount(toAmount)
     setToAmount(tempAmount)
+  }
+
+  // Update the handleFromAmountChange function
+  const handleFromAmountChange = (value: string) => {
+    setFromAmount(value)
+    // Use real-time exchange rate instead of hardcoded value
+    setToAmount(value ? (Number.parseFloat(value) * exchangeRate).toFixed(6) : "")
   }
 
   return (
@@ -733,8 +794,7 @@ const handleSwap = async () => {
                 <Button
                   onClick={resetSwap}
                   variant="outline"
-                  className="w-full border-white/20 text-white hover:bg-white/10"
-                  style={{ backgroundColor: "black" }}
+                  className="w-full border-white/20 text-white hover:bg-white/10 bg-gray-800/50 hover:bg-gray-700/50"
                 >
                   Start New Swap
                 </Button>
