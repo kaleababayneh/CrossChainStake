@@ -488,7 +488,7 @@ const handleSwap = async () => {
       <header className="relative z-10 flex justify-between items-center p-6">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl shadow-lg"></div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Cross-Stake</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Cosmic-Link</h1>
           <div className="text-xs text-gray-400 mt-1">Ethereum ↔ Cosmos</div>
         </div>
 
