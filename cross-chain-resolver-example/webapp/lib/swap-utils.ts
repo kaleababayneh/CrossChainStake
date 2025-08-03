@@ -120,6 +120,12 @@ async function getOrDeployContracts(provider: ethers.JsonRpcProvider) {
 }
 
 
+// Callback function types for real-time UI updates
+export interface SwapProgressCallbacks {
+  onStepUpdate: (step: string, status: 'in_progress' | 'completed' | 'failed', txHash?: string, message?: string) => void
+  onSwapDataUpdate: (data: Partial<SwapResponse>) => void
+}
+
 export async function executeCrossChainSwap(
   
   makerAmountReq: string,
@@ -127,7 +133,8 @@ export async function executeCrossChainSwap(
   metaMaskAddress: string,
   keplrAddress: string,
   evm2inj: boolean,
-  secretBytes: string
+  secretBytes: string,
+  callbacks?: SwapProgressCallbacks
 
 ): Promise<any> {
 
@@ -165,6 +172,9 @@ export async function executeCrossChainSwap(
 
   if (evm2inj) {
 
+      // Step 1: Token Approval
+      callbacks?.onStepUpdate('approve', 'in_progress', undefined, 'Approving USDC for cross-chain transfer...')
+      
       const approveToken = await signer.sendTransaction({
                 to: SWAP_CONFIG.source.tokens.USDC,
                 data: '0x095ea7b3' + coder.encode(['address', 'uint256'], [SWAP_CONFIG.source.limitOrderProtocol, MaxUint256]).slice(2)
@@ -172,6 +182,7 @@ export async function executeCrossChainSwap(
 
       await approveToken.wait()
       console.log('✅ USDC approved for limit order protocol')
+      callbacks?.onStepUpdate('approve', 'completed', approveToken.hash, 'USDC approved successfully')
 
       const srcResolverContract = new ethers.Contract(
         resolver,
@@ -255,6 +266,9 @@ export async function executeCrossChainSwap(
     console.log('💰 FILL AMOUNT:', fillAmount.toString())
     console.log('Resolver contract address:', resolverContract)
 
+    // Step 2: Source Escrow Deployment
+    callbacks?.onStepUpdate('src_escrow', 'in_progress', undefined, 'Deploying escrow contract on Ethereum...')
+
     const deployTxonSrc = resolverContract.deploySrc(
           SWAP_CONFIG.source.chainId,
         order,
@@ -282,6 +296,9 @@ export async function executeCrossChainSwap(
     console.log('✅ Transaction sent successfully!', receipt)
     console.log(`Order ${orderHash} filled for ${fillAmount} in tx ${orderFillHash}`)
 
+    callbacks?.onStepUpdate('src_escrow', 'completed', orderFillHash, 'Source escrow deployed successfully')
+    callbacks?.onSwapDataUpdate({ srcEscrowTx: orderFillHash })
+
     // Extract the event from the receipt logs directly
     const srcEscrowEvent = srcFactory.parseSrcDeployEventFromReceipt(receipt)
 
@@ -291,6 +308,9 @@ export async function executeCrossChainSwap(
     const address2 = keplrAddress
 
     const hash = createHash('sha256').update(Buffer.from(secretBytes, 'hex')).digest('hex')
+
+    // Step 3: Destination Funding
+    callbacks?.onStepUpdate('dst_funding', 'in_progress', undefined, 'Funding escrow on Injective network...')
 
     const injectiveTx = await injective.fund_dst_escrow_with_params(
                     hash, 
@@ -303,12 +323,17 @@ export async function executeCrossChainSwap(
 
     console.log('✅ Injective funding transaction:', injectiveTx)
     console.log('🔧 RESOLVER DEBUG - injectiveTx:', injectiveTx)
+    
+    callbacks?.onStepUpdate('dst_funding', 'completed', injectiveTx.txHash, 'Destination funded successfully')
+    callbacks?.onSwapDataUpdate({ dstFundingTx: injectiveTx.txHash })
 
       // set timeout for 11 seconds to allow the dst escrow to be created with a print countdown
+      callbacks?.onStepUpdate('claim', 'in_progress', undefined, 'Waiting for escrow confirmation...')
       await new Promise<void>(resolve => {
         let countdown = 11
         const interval = setInterval(() => {
           console.log(`⏳ Countdown: ${countdown} seconds remaining`)
+          callbacks?.onStepUpdate('claim', 'in_progress', undefined, `Waiting ${countdown}s for escrow confirmation...`)
           countdown -= 1
           if (countdown < 0) {
             clearInterval(interval)
@@ -326,6 +351,9 @@ export async function executeCrossChainSwap(
     )
 
     console.log('✅ Injective claim transaction:', injectiveClaimFund)
+    
+    callbacks?.onStepUpdate('claim', 'completed', injectiveClaimFund, 'Funds claimed on Injective')
+    callbacks?.onSwapDataUpdate({ claimTx: injectiveClaimFund })
 
 
     const ESCROW_SRC_IMPLEMENTATION = await srcFactory.getSourceImpl()
@@ -342,6 +370,9 @@ export async function executeCrossChainSwap(
     console.log('Escrow factory address:', escrowFactory)
 
     console.log(`[] Resolver withdrawing from source escrow ${srcEscrowAddress}`)
+
+    // Step 5: Resolver Withdrawal
+    callbacks?.onStepUpdate('withdraw', 'in_progress', undefined, 'Resolver withdrawing from source escrow...')
 
     const withdrawTxRequest = resolverContract.withdraw('src', srcEscrowAddress, secretBytesHex, srcEscrowEvent[0])
     console.log('📤 WITHDRAW TX REQUEST:')
@@ -363,6 +394,9 @@ export async function executeCrossChainSwap(
     console.log('Withdrawal receipt:', withdrawReceipt)
     console.log('✅ WITHDRAWAL RESULT:')
     console.log(`[$] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
+    
+    callbacks?.onStepUpdate('withdraw', 'completed', resolverWithdrawHash, 'Cross-chain swap completed successfully!')
+    callbacks?.onSwapDataUpdate({ withdrawTx: resolverWithdrawHash })
 
 }
  else {
@@ -375,6 +409,7 @@ export async function executeCrossChainSwap(
   
     // Step 1: Resolver grants fee allowance to user via Next.js API
     console.log('🎁 Step 1: Resolver granting fee allowance to user via API...')
+    callbacks?.onStepUpdate('fee_grant', 'in_progress', undefined, 'Resolver granting fee allowance for gasless transaction...')
     let feeGrant;
     try {
       feeGrant = await injective.grantFeeAllowanceToUser(
@@ -388,6 +423,7 @@ export async function executeCrossChainSwap(
       console.log('- Tx Hash:', feeGrant.txHash)
       console.log('- Granter:', feeGrant.granter)
       console.log('- Expires:', feeGrant.expiresAt)
+      callbacks?.onStepUpdate('fee_grant', 'completed', feeGrant.txHash, 'Fee allowance granted successfully')
     } catch (error) {
       console.error('❌ Fee grant failed:', error)
       throw new Error(`Fee grant failed: ${error}`)
@@ -399,6 +435,7 @@ export async function executeCrossChainSwap(
     
     // Step 3: User creates gasless swap using the fee grant
     console.log('⛽ Step 3: User creating gasless swap with granted fees...')
+    callbacks?.onStepUpdate('gasless_swap', 'in_progress', undefined, 'Creating gasless swap on Injective...')
     let lock_inj_on_src_chain;
     try {
       lock_inj_on_src_chain = await injective.fund_dst_escrow_with_fee_grant(
@@ -413,6 +450,8 @@ export async function executeCrossChainSwap(
       console.log("✅ Gasless swap created successfully!")
       console.log("- Swap ID:", swapId)
       console.log("- Tx Hash:", lock_inj_on_src_chain.txHash)
+      callbacks?.onStepUpdate('gasless_swap', 'completed', lock_inj_on_src_chain.txHash, 'Gasless swap created successfully')
+      callbacks?.onSwapDataUpdate({ dstFundingTx: lock_inj_on_src_chain.txHash })
     } catch (error) {
       console.error('❌ Gasless swap creation failed:', error)
       throw new Error(`Gasless swap creation failed: ${error}`)
@@ -479,6 +518,8 @@ export async function executeCrossChainSwap(
 
       console.log(`Order Hash: ${orderHash} | Resolver filling reverse order`)
 
+      // Step 3: Reverse Order Fill
+      callbacks?.onStepUpdate('reverse_order', 'in_progress', undefined, 'Resolver filling reverse order on Ethereum...')
             
       const resolverTx = resolverContract.deploySrc(
               SWAP_CONFIG.source.chainId,
@@ -503,6 +544,8 @@ export async function executeCrossChainSwap(
       const receipt = await transactionResponse.wait(1)
 
       console.log('📜 Transaction receipt:', receipt)
+      callbacks?.onStepUpdate('reverse_order', 'completed', receipt?.hash, 'Reverse order filled successfully')
+      callbacks?.onSwapDataUpdate({ srcEscrowTx: receipt?.hash })
 
       const evmEscrowEvent = await srcFactory.parseSrcDeployEventFromReceipt(receipt)
 
@@ -528,9 +571,10 @@ export async function executeCrossChainSwap(
         ESCROW_SRC_IMPLEMENTATION
     )
 
-    console.log('🏦 WITHDRAWAL SETUP:', evmEscrowAddress)
+          console.log('🏦 WITHDRAWAL SETUP:', evmEscrowAddress)
 
-
+      // Step 4: EVM Withdrawal
+      callbacks?.onStepUpdate('evm_withdraw', 'in_progress', undefined, 'Resolver withdrawing from EVM escrow...')
 
       const resolverWithdrawTxRequest = resolverContract.withdraw('src', evmEscrowAddress, secretBytesHex, evmEscrowEvent[0])
       console.log('📤 WITHDRAW TX REQUEST:')
@@ -553,11 +597,15 @@ export async function executeCrossChainSwap(
       console.log('Withdrawal receipt:', withdrawReceipt)
       console.log('✅ WITHDRAWAL RESULT:')
       console.log(`[$] Resolver withdrawn funds in tx ${resolverWithdrawHash}`)
+      callbacks?.onStepUpdate('evm_withdraw', 'completed', resolverWithdrawHash, 'EVM withdrawal completed')
 
 
     
 
 
+        // Step 5: Final Transfer
+        callbacks?.onStepUpdate('transfer', 'in_progress', undefined, 'Transferring funds to your wallet...')
+        
         const transferTx = await ResolverWallet.sendTransaction({
           to: resolver, // resolver contract address
           data: transferTxData,
@@ -568,9 +616,14 @@ export async function executeCrossChainSwap(
 
         console.log('Transfer tx hash:', transferReceipt?.hash)
         console.log(` ${metaMaskAddress}`)
+        callbacks?.onStepUpdate('transfer', 'completed', transferReceipt?.hash, 'Funds transferred to your wallet')
+        callbacks?.onSwapDataUpdate({ withdrawTx: transferReceipt?.hash })
                   
 
 
+      // Step 6: Injective Claim
+      callbacks?.onStepUpdate('inj_claim', 'in_progress', undefined, 'Resolver claiming on Injective...')
+      
       const resolver_claim = await injective.claim_funds_with_params_resolver(
                     swapId,
                     secretBytes,
@@ -580,6 +633,8 @@ export async function executeCrossChainSwap(
 
       console.log('✅ Injective claim transaction sent successfully!')
       console.log('Claim receipt:',  resolver_claim)
+      callbacks?.onStepUpdate('inj_claim', 'completed', resolver_claim, 'Resolver claimed on Injective')
+      callbacks?.onSwapDataUpdate({ claimTx: resolver_claim })
       
       console.log('')
       console.log('🎉 GASLESS CROSS-CHAIN SWAP COMPLETED SUCCESSFULLY!')
@@ -658,7 +713,7 @@ export function getSwapStatus(
   if (hasInitiated) {
     return {
       step: 'initiated',
-      message: 'Swap initiated. Please deploy source escrow with MetaMask.',
+      message: '',
       txHashes: {}
     }
   }

@@ -13,7 +13,8 @@ import {
   executeCrossChainSwap,
   getSwapStatus, 
   SwapResponse, 
-  SwapStatus 
+  SwapStatus,
+  SwapProgressCallbacks
 } from "@/lib/swap-utils"
 import { SwapExplorer } from "@/components/SwapExplorer"
 import { ethers } from "ethers"
@@ -313,14 +314,53 @@ const handleSwap = async () => {
       takerAmountReq = toAmount   // USDC amount user expects to receive
     }
 
+    // Setup real-time callbacks for UI updates
+    const callbacks: SwapProgressCallbacks = {
+      onStepUpdate: (step: string, status: 'in_progress' | 'completed' | 'failed', txHash?: string, message?: string) => {
+        console.log(`🔄 Step Update: ${step} - ${status}`, { txHash, message })
+        
+        // Update sidebar via window method
+        if (typeof window !== 'undefined' && (window as any).updateSwapStep) {
+          (window as any).updateSwapStep(step, status, txHash, message)
+        }
+
+        // Also update overall swap status for compatibility
+        setSwapStatus(prev => ({
+          ...prev,
+          step: status === 'completed' && (step === 'withdraw' || step === 'transfer') ? 'completed' : 
+                status === 'completed' && (step === 'claim' || step === 'inj_claim') ? 'claimed' :
+                status === 'completed' && step === 'src_escrow' ? 'source_deployed' :
+                status === 'completed' && (step === 'dst_funding' || step === 'gasless_swap') ? 'destination_funded' :
+                'initiated',
+          message: message || prev.message
+        }))
+      },
+      onSwapDataUpdate: (data: Partial<SwapResponse>) => {
+        console.log('📊 Swap Data Update:', data)
+        setSwapData(prev => prev ? { ...prev, ...data } : {
+          success: true,
+          swapId: `swap-${Date.now()}`,
+          orderHash: '',
+          secretBytes,
+          order: null,
+          signature: '',
+          injectiveContract: '',
+          injAmount: takerAmountReq,
+          exchangeRate: Number.parseFloat(takerAmountReq) / Number.parseFloat(makerAmountReq),
+          message: 'Swap in progress...',
+          ...data
+        })
+      }
+    }
+
     const result = await executeCrossChainSwap(
       makerAmountReq,
       takerAmountReq,
       metamaskWallet.fullAddress,
       keplrWallet.fullAddress,
       isEvmToInj, // ✅ Pass boolean value,
-      secretBytes
-
+      secretBytes,
+      callbacks
     )
 
     console.log('🎉 CROSS-CHAIN SWAP COMPLETED!')
@@ -694,6 +734,7 @@ const handleSwap = async () => {
                   onClick={resetSwap}
                   variant="outline"
                   className="w-full border-white/20 text-white hover:bg-white/10"
+                  style={{ backgroundColor: "black" }}
                 >
                   Start New Swap
                 </Button>

@@ -134,12 +134,26 @@ export function SwapExplorer({
     }
   }, [fromToken, toToken])
 
-  // Update step statuses based on swap progress
-  useEffect(() => {
-    if (!isSwapping && !swapData) return
+  // Track step updates from callbacks
+  const [stepUpdates, setStepUpdates] = useState<Record<string, { status: 'in_progress' | 'completed' | 'failed', txHash?: string, message?: string }>>({})
 
+  // Update step statuses based on swap progress and real-time updates
+  useEffect(() => {
     setSteps(prevSteps => prevSteps.map(step => {
-      // Mark steps as completed based on available transaction data
+      // Check for real-time updates first (these come from callbacks)
+      const update = stepUpdates[step.id]
+      if (update) {
+        return {
+          ...step,
+          status: update.status,
+          txHash: update.txHash,
+          explorerUrl: update.txHash ? 
+            (step.network === 'evm' ? `${EXPLORER_URLS.evm}/tx/${update.txHash}` : `${EXPLORER_URLS.injective}/transaction/${update.txHash}`) 
+            : undefined
+        }
+      }
+
+      // Fallback to swapData for backwards compatibility
       if (swapData?.srcEscrowTx && (step.id === 'src_escrow' || step.id === 'approve')) {
         return {
           ...step,
@@ -153,41 +167,62 @@ export function SwapExplorer({
         return {
           ...step,
           status: 'completed',
-          txHash: step.id === 'dst_funding' ? swapData.dstFundingTx : undefined,
-          explorerUrl: step.id === 'dst_funding' ? `${EXPLORER_URLS.injective}/transaction/${swapData.dstFundingTx}` : undefined
+          txHash: step.id === 'dst_funding' || step.id === 'gasless_swap' ? swapData.dstFundingTx : undefined,
+          explorerUrl: (step.id === 'dst_funding' || step.id === 'gasless_swap') ? `${EXPLORER_URLS.injective}/transaction/${swapData.dstFundingTx}` : undefined
         }
       }
 
-      if (swapData?.claimTx && (step.id === 'claim' || step.id === 'reverse_order' || step.id === 'evm_withdraw')) {
+      if (swapData?.claimTx && (step.id === 'claim' || step.id === 'inj_claim')) {
         return {
           ...step,
           status: 'completed',
-          txHash: step.id === 'claim' ? swapData.claimTx : undefined,
-          explorerUrl: step.id === 'claim' ? `${EXPLORER_URLS.injective}/transaction/${swapData.claimTx}` : undefined
+          txHash: swapData.claimTx,
+          explorerUrl: `${EXPLORER_URLS.injective}/transaction/${swapData.claimTx}`
         }
       }
 
-      if (swapData?.withdrawTx && (step.id === 'withdraw' || step.id === 'transfer' || step.id === 'inj_claim')) {
+      if (swapData?.withdrawTx && (step.id === 'withdraw' || step.id === 'transfer')) {
         return {
           ...step,
           status: 'completed',
-          txHash: step.id === 'withdraw' ? swapData.withdrawTx : undefined,
-          explorerUrl: step.id === 'withdraw' ? `${EXPLORER_URLS.evm}/tx/${swapData.withdrawTx}` : undefined
-        }
-      }
-
-      // Set in_progress for current step
-      if (isSwapping) {
-        const completedSteps = prevSteps.filter(s => s.status === 'completed').length
-        const currentStepIndex = prevSteps.findIndex(s => s.id === step.id)
-        if (currentStepIndex === completedSteps && step.status === 'pending') {
-          return { ...step, status: 'in_progress' }
+          txHash: step.id === 'withdraw' || step.id === 'transfer' ? swapData.withdrawTx : undefined,
+          explorerUrl: (step.id === 'withdraw' || step.id === 'transfer') ? `${EXPLORER_URLS.evm}/tx/${swapData.withdrawTx}` : undefined
         }
       }
 
       return step
     }))
-  }, [swapData, isSwapping])
+  }, [swapData, stepUpdates])
+
+  // Expose a method to update steps from parent component
+  useEffect(() => {
+    // Add a global method that the parent can call
+    const handleStepUpdate = (stepId: string, status: 'in_progress' | 'completed' | 'failed', txHash?: string, message?: string) => {
+      console.log(`📱 Sidebar Update: ${stepId} - ${status}`, { txHash, message })
+      setStepUpdates(prev => ({
+        ...prev,
+        [stepId]: { status, txHash, message }
+      }))
+    }
+
+    // Store in window for parent access
+    if (typeof window !== 'undefined') {
+      (window as any).updateSwapStep = handleStepUpdate
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).updateSwapStep
+      }
+    }
+  }, [])
+
+  // Reset step updates when sidebar closes or swap resets
+  useEffect(() => {
+    if (!isVisible && !isSwapping) {
+      setStepUpdates({})
+    }
+  }, [isVisible, isSwapping])
 
   const getStepIcon = (status: SwapStep['status']) => {
     switch (status) {
@@ -269,7 +304,9 @@ export function SwapExplorer({
                       />
                     </div>
                     
-                    <p className="text-xs text-gray-400 mb-2">{step.description}</p>
+                    <p className="text-xs text-gray-400 mb-2">
+                      {stepUpdates[step.id]?.message || step.description}
+                    </p>
                     
                     {/* Transaction link */}
                     {step.txHash && step.explorerUrl && (
@@ -297,12 +334,12 @@ export function SwapExplorer({
                       </div>
                     )}
                     
-                    {/* Status indicator */}
+                    {/* Status indicator with dynamic message */}
                     {step.status === 'in_progress' && (
                       <div className="mt-2">
                         <div className="flex items-center space-x-2 text-xs text-blue-400">
                           <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
-                          <span>Processing...</span>
+                          <span>{stepUpdates[step.id]?.message || 'Processing...'}</span>
                         </div>
                       </div>
                     )}
