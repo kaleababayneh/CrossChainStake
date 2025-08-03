@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowDownUp, RefreshCw, CheckCircle, Clock, AlertCircle } from "lucide-react"
+import { ArrowDownUp, RefreshCw, CheckCircle, Clock, AlertCircle, Activity } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { fetchUSDCBalance, fetchINJBalance, getTokenBalance, formatBalance } from "@/lib/balance-utils"
@@ -15,6 +15,7 @@ import {
   SwapResponse, 
   SwapStatus 
 } from "@/lib/swap-utils"
+import { SwapExplorer } from "@/components/SwapExplorer"
 import { ethers } from "ethers"
 
 
@@ -58,6 +59,9 @@ export default function TokenSwap() {
   // Cross-chain swap state
   const [swapData, setSwapData] = useState<SwapResponse | null>(null)
   const [swapStatus, setSwapStatus] = useState<SwapStatus>({ step: 'failed', message: 'Swap not initiated', txHashes: {} })
+  
+  // Sidebar state
+  const [showExplorer, setShowExplorer] = useState(false)
 
   // Connect MetaMask
   const connectMetaMask = async () => {
@@ -281,6 +285,7 @@ const handleSwap = async () => {
   }
 
   setIsSwapping(true)
+  setShowExplorer(true) // Show explorer sidebar when swap starts
 
   try {
     console.log('🚀 STARTING COMPLETE CROSS-CHAIN SWAP')
@@ -321,15 +326,31 @@ const handleSwap = async () => {
     console.log('🎉 CROSS-CHAIN SWAP COMPLETED!')
     console.log('Result:', result)
 
-    // Update UI state
-    //setSwapData(result)
-    //alert('Cross-chain swap completed successfully!')
+    // Update UI state with swap completion
+    setSwapData({
+      success: true,
+      swapId: `swap-${Date.now()}`,
+      orderHash: '',
+      secretBytes,
+      order: null,
+      signature: '',
+      injectiveContract: '',
+      injAmount: takerAmountReq,
+      exchangeRate: Number.parseFloat(takerAmountReq) / Number.parseFloat(makerAmountReq),
+      message: result?.message || 'Cross-chain swap completed successfully!',
+      // Transaction hashes will be populated by the executeCrossChainSwap function
+      srcEscrowTx: result?.srcEscrowTx,
+      dstFundingTx: result?.dstFundingTx,
+      claimTx: result?.claimTx,
+      withdrawTx: result?.withdrawTx
+    })
 
   } catch (error) {
     console.error('Cross-chain swap failed:', error)
     alert(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   } finally {
     setIsSwapping(false)
+    // Keep explorer open even after swap completes so user can see final results
   }
 }
   // Reset swap state
@@ -337,6 +358,7 @@ const handleSwap = async () => {
     setSwapData(null)
     setFromAmount("")
     setToAmount("")
+    setShowExplorer(false) // Hide explorer when resetting
   }
 
   // Reverse swap direction
@@ -398,8 +420,27 @@ const handleSwap = async () => {
         <Card className="w-full max-w-lg p-8 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl">
           <div className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-2">Swap Tokens</h2>
-              <p className="text-gray-400 text-sm font-medium">Cross-chain swap between Ethereum and Cosmos</p>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex-1" />
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Swap Tokens</h2>
+                  <p className="text-gray-400 text-sm font-medium">Cross-chain swap between Ethereum and Cosmos</p>
+                </div>
+                <div className="flex-1 flex justify-end">
+                  <Button
+                    onClick={() => setShowExplorer(true)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-400 hover:text-white p-2 relative"
+                    title="Open Swap Explorer"
+                  >
+                    <Activity className="w-5 h-5" />
+                    {(isSwapping || swapData) && (
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-pulse" />
+                    )}
+                  </Button>
+                </div>
+              </div>
             </div>
 
             {/* From Token - Dynamic Network */}
@@ -708,6 +749,17 @@ const handleSwap = async () => {
           Powered by <span className="text-white font-semibold">1inch Fusion+</span> • Ethereum ↔ Cosmos Swap
         </p>
       </footer>
+
+      {/* Swap Explorer Sidebar */}
+      <SwapExplorer
+        isVisible={showExplorer}
+        onClose={() => setShowExplorer(false)}
+        swapData={swapData}
+        swapStatus={swapStatus}
+        isSwapping={isSwapping}
+        fromToken={fromToken}
+        toToken={toToken}
+      />
     </div>
   )
 }
